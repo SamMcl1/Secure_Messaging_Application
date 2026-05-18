@@ -1,0 +1,6 @@
+Flask
+cryptography
+argon2-cffi
+web3
+python-dotenv
+pyOpenSSL

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Message Integrity Verification</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <h1>Message Integrity Verification</h1>
+    <p>Verify that a message has not been tampered with using the Ethereum Sepolia blockchain.</p>
+
+    <section>
+        <label for="message-content">Message Content</label>
+        <textarea id="message-content" rows="6" placeholder="Paste the original message content here..."></textarea>
+
+        <label for="tx-hash">Transaction Hash</label>
+        <input type="text" id="tx-hash" placeholder="0x...">
+
+        <button id="verify-btn">Verify</button>
+    </section>
+
+    <section id="result" hidden>
+        <h2 id="result-status"></h2>
+        <p id="result-detail"></p>
+    </section>
+
+    <script src="js/verify.js"></script>
+</body>
+</html>

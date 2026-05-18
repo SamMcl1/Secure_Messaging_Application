@@ -67,3 +67,35 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.env
+.env.*
+venv/
+.venv/
+env/
+
+# SQLite
+*.db
+*.sqlite3
+
+# SSL/TLS certificates and private keys
+*.pem
+*.crt
+*.key
+*.csr
+*.p12
+*.pfx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
