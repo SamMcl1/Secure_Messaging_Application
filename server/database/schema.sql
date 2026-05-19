@@ -48,8 +48,25 @@ CREATE TABLE IF NOT EXISTS blockchain_records (
 );
 
 -- Enable Row Level Security (RLS) on all tables
--- Users can only see their own data
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE message_access ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blockchain_records ENABLE ROW LEVEL SECURITY;
+
+-- Explicitly deny all direct Supabase REST/realtime access for anon and authenticated roles.
+-- Our server connects via service_role (bypasses RLS); access control is enforced in application code.
+-- AS RESTRICTIVE means this policy overrides any permissive policy that might be added in future.
+CREATE POLICY "deny_direct_access" ON users
+    AS RESTRICTIVE FOR ALL TO anon, authenticated USING (false);
+
+CREATE POLICY "deny_direct_access" ON messages
+    AS RESTRICTIVE FOR ALL TO anon, authenticated USING (false);
+
+CREATE POLICY "deny_direct_access" ON message_access
+    AS RESTRICTIVE FOR ALL TO anon, authenticated USING (false);
+
+CREATE POLICY "deny_direct_access" ON revoked_tokens
+    AS RESTRICTIVE FOR ALL TO anon, authenticated USING (false);
+
+CREATE POLICY "deny_direct_access" ON blockchain_records
+    AS RESTRICTIVE FOR ALL TO anon, authenticated USING (false);

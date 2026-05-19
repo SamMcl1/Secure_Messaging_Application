@@ -10,3 +10,4 @@ supabase
 pydantic>=2.0,<3.0
 flask-limiter
 flask-cors
+flask-talisman
