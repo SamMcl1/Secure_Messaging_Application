@@ -41,15 +41,13 @@ class User:
     def get_by_id(user_id):
         """Fetch a user row by ID. Returns User or None."""
         rows = query(
-            'SELECT id, username, password_hash, public_key FROM users WHERE id = %s',
+            'SELECT id, username, public_key FROM users WHERE id = %s',
             (user_id,)
         )
         if not rows:
             return None
         row = rows[0]
-        user = User(row['username'], public_key=row['public_key'], user_id=row['id'])
-        user.password_hash = row['password_hash']
-        return user
+        return User(row['username'], public_key=row['public_key'], user_id=row['id'])
 
     def verify_password(self, password):
         if not hasattr(self, 'password_hash'):
