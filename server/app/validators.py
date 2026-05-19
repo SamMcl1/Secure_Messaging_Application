@@ -25,7 +25,13 @@ _PATH_TRAVERSAL = re.compile(r'\.\.[/\\]|%2e%2e', re.IGNORECASE)
 
 _CMD_INJECTION = re.compile(r'[;&|`]|\$[({]')
 
-_BASE64 = re.compile(r'^[A-Za-z0-9+/=_-]+$')
+_BASE64 = re.compile(
+    r'^(?:'
+    r'(?:(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)'
+    r'|'
+    r'(?:(?:[A-Za-z0-9_-]{4})*(?:[A-Za-z0-9_-]{2}==|[A-Za-z0-9_-]{3}=)?)'
+    r')$'
+)
 
 
 def _reject_threats(value: str, field: str) -> str:
