@@ -12,6 +12,11 @@ def _can_access(msg, user_id):
     return Message.has_access(msg['id'], user_id)
 
 
+def _can_manage_access(msg, user_id):
+    """True only for users allowed to manage access grants."""
+    return msg['sender_id'] == user_id
+
+
 def _validate_recipient_id(value):
     """Return (int, None) on success, (None, response) on failure."""
     if not isinstance(value, int) or isinstance(value, bool):
@@ -124,7 +129,7 @@ def grant_access(message_id, target_user_id):
     msg = Message.get_by_id(message_id)
     if not msg:
         return jsonify({'message': 'Message not found'}), 404
-    if not _can_access(msg, g.user_id):
+    if not _can_manage_access(msg, g.user_id):
         return jsonify({'message': 'Access denied'}), 403
 
     if not User.get_by_id(target_user_id):
@@ -145,7 +150,7 @@ def revoke_access(message_id, target_user_id):
     msg = Message.get_by_id(message_id)
     if not msg:
         return jsonify({'message': 'Message not found'}), 404
-    if not _can_access(msg, g.user_id):
+    if not _can_manage_access(msg, g.user_id):
         return jsonify({'message': 'Access denied'}), 403
 
     if not Message.has_access(message_id, target_user_id):
