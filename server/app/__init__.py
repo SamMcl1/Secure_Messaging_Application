@@ -1,4 +1,5 @@
 from flask import Flask, jsonify
+from werkzeug.exceptions import HTTPException
 from .config import Config
 from .db import init_db, close_conn
 
@@ -25,6 +26,8 @@ def create_app(config_class=Config):
 
     @app.errorhandler(Exception)
     def unhandled_exception(e):
+        if isinstance(e, HTTPException):
+            return e
         app.logger.exception('Unhandled exception: %s', e)
         return jsonify({'message': 'Internal server error'}), 500
 
