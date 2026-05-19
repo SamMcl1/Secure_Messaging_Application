@@ -12,7 +12,7 @@ class Config:
     DEBUG = os.getenv('FLASK_DEBUG', '0') == '1'
 
     # CORS — set to the exact client origin (e.g. https://app.example.com).
-    # Use "null" for file:// local development.
+    # For local development, prefer an explicit localhost origin (e.g. http://localhost:3000).
     # Leave unset to deny all cross-origin requests.
     ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '')
 
