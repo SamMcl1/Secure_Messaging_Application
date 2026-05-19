@@ -1,10 +1,11 @@
 """
-Cryptographic primitives — HPKE Mode_Auth, AEAD, HKDF, private key protection.
+Cryptographic primitives — authenticated key establishment, AEAD, HKDF, private key protection.
 
-Key establishment: HPKE Mode_Auth (RFC 9180 §5.1.3)
-  KEM:  X25519 (ephemeral-static + static-static for sender auth)
-  KDF:  HKDF-SHA256
-  AEAD: AES-256-GCM, nonce derived from KDF context (not stored)
+Key establishment: HPKE Mode_Auth-inspired construction over X25519 + HKDF-SHA256 + AES-256-GCM.
+  Follows the two-DH pattern from RFC 9180 §5.1.3 (ephemeral-static + static-static) but does
+  not implement RFC 9180's LabeledExtract/LabeledExpand suite_id structure. The security
+  properties (sender authentication, KEM secrecy) hold; the wire format is not interoperable
+  with RFC 9180 compliant implementations.
 
 Password/key protection: Argon2id → HKDF-SHA256 → AES-256-GCM
 """
@@ -56,7 +57,7 @@ def _hkdf(ikm: bytes, length: int, info: bytes, salt: bytes | None = None) -> by
     ).derive(ikm)
 
 
-# ── HPKE Mode_Auth (RFC 9180 §5.1.3) ────────────────────────────────────────
+# ── Authenticated key establishment (HPKE Mode_Auth-inspired) ───────────────
 
 def hpke_seal(
     sender_sk_bytes: bytes,

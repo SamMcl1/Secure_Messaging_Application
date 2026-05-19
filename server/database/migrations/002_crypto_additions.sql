@@ -27,17 +27,23 @@ ALTER TABLE revoked_tokens ENABLE ROW LEVEL SECURITY;
 --    The Flask server connects via service_role which bypasses RLS.
 --    These policies block any direct REST or realtime access by anon/authenticated roles,
 --    so the database is only reachable through the application layer.
+--    DROP IF EXISTS makes this block safe to re-run on an existing database.
+DROP POLICY IF EXISTS "deny_direct_access" ON users;
 CREATE POLICY "deny_direct_access" ON users
     AS RESTRICTIVE FOR ALL TO anon, authenticated USING (false);
 
+DROP POLICY IF EXISTS "deny_direct_access" ON messages;
 CREATE POLICY "deny_direct_access" ON messages
     AS RESTRICTIVE FOR ALL TO anon, authenticated USING (false);
 
+DROP POLICY IF EXISTS "deny_direct_access" ON message_access;
 CREATE POLICY "deny_direct_access" ON message_access
     AS RESTRICTIVE FOR ALL TO anon, authenticated USING (false);
 
+DROP POLICY IF EXISTS "deny_direct_access" ON revoked_tokens;
 CREATE POLICY "deny_direct_access" ON revoked_tokens
     AS RESTRICTIVE FOR ALL TO anon, authenticated USING (false);
 
+DROP POLICY IF EXISTS "deny_direct_access" ON blockchain_records;
 CREATE POLICY "deny_direct_access" ON blockchain_records
     AS RESTRICTIVE FOR ALL TO anon, authenticated USING (false);
