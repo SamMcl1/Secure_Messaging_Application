@@ -76,11 +76,11 @@ def refresh():
     if not old_jti or not old_exp:
         return jsonify({'message': 'Invalid refresh token structure'}), 401
 
-    access_token, new_refresh_token = create_tokens(payload['user_id'], payload['username'])
-
     expires_at = datetime.fromtimestamp(old_exp, tz=timezone.utc)
     if not RevokedToken.add(old_jti, payload['user_id'], expires_at):
         return jsonify({'message': 'Failed to rotate refresh token'}), 500
+
+    access_token, new_refresh_token = create_tokens(payload['user_id'], payload['username'])
 
     return jsonify({
         'message': 'Token refreshed successfully',
