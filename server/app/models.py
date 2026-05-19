@@ -1,4 +1,4 @@
-from app.db import query, execute
+from app.db import query, execute, get_conn
 from app.password_utils import hash_password, verify_password
 
 
@@ -161,12 +161,13 @@ class RevokedToken:
         if not revocations:
             return True
         try:
-            for jti, user_id, expires_at in revocations:
-                execute(
+            conn = get_conn()
+            with conn.cursor() as cur:
+                cur.executemany(
                     '''INSERT INTO revoked_tokens (jti, user_id, expires_at)
                        VALUES (%s, %s, %s)
                        ON CONFLICT (jti) DO NOTHING''',
-                    (jti, user_id, expires_at)
+                    revocations
                 )
             return True
         except Exception:
