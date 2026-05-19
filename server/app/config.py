@@ -26,6 +26,11 @@ class Config:
     # Payload size cap (enforced by Flask before any route runs)
     MAX_CONTENT_LENGTH = 128 * 1024  # 128 KB
 
+    # HTTPS enforcement — production only, requires a reverse proxy that sets X-Forwarded-Proto.
+    # Set TRUSTED_PROXY_COUNT=1 and FORCE_HTTPS=1 in production; leave at defaults for local dev.
+    TRUSTED_PROXY_COUNT = int(os.getenv('TRUSTED_PROXY_COUNT', '0'))
+    FORCE_HTTPS = os.getenv('FORCE_HTTPS', '0') == '1'
+
     # Blockchain
     SEPOLIA_RPC_URL = os.environ.get('SEPOLIA_RPC_URL', '')
     CONTRACT_ADDRESS = os.environ.get('CONTRACT_ADDRESS', '')
