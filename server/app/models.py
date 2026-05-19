@@ -137,3 +137,20 @@ class Message:
             return bool(rows)
         except Exception:
             return False
+
+
+class RevokedToken:
+
+    @staticmethod
+    def add(jti, user_id, expires_at):
+        """Record a revoked JWT JTI. Returns True on success, False on DB error."""
+        try:
+            execute(
+                '''INSERT INTO revoked_tokens (jti, user_id, expires_at)
+                   VALUES (%s, %s, %s)
+                   ON CONFLICT (jti) DO NOTHING''',
+                (jti, user_id, expires_at)
+            )
+            return True
+        except Exception:
+            return False

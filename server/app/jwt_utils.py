@@ -1,3 +1,4 @@
+import uuid
 import jwt
 from datetime import datetime, timedelta
 from functools import lru_cache, wraps
@@ -51,44 +52,42 @@ def load_keys():
 
 
 def create_tokens(user_id, username):
-    """Create access and refresh tokens."""
+    """Create access and refresh tokens, each with a unique JTI."""
     private_key, _ = load_keys()
-    
-    # Access token (1 hour)
+    now = datetime.utcnow()
+
     access_payload = {
         'user_id': user_id,
         'username': username,
         'type': 'access',
-        'exp': datetime.utcnow() + timedelta(hours=1),
-        'iat': datetime.utcnow()
+        'jti': str(uuid.uuid4()),
+        'exp': now + timedelta(hours=1),
+        'iat': now,
     }
-    
-    # Refresh token (7 days)
+
     refresh_payload = {
         'user_id': user_id,
         'username': username,
         'type': 'refresh',
-        'exp': datetime.utcnow() + timedelta(days=7),
-        'iat': datetime.utcnow()
+        'jti': str(uuid.uuid4()),
+        'exp': now + timedelta(days=7),
+        'iat': now,
     }
-    
+
     access_token = jwt.encode(access_payload, private_key, algorithm='RS256')
     refresh_token = jwt.encode(refresh_payload, private_key, algorithm='RS256')
-    
+
     return access_token, refresh_token
 
 
 def verify_token(token, token_type='access'):
     """Verify and decode a JWT token."""
     _, public_key = load_keys()
-    
+
     try:
         payload = jwt.decode(token, public_key, algorithms=['RS256'])
-        
-        # Check token type
         if payload.get('type') != token_type:
             return None
-        
         return payload
     except jwt.ExpiredSignatureError:
         return None
@@ -101,26 +100,35 @@ def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
-        
-        # Check for token in Authorization header
+
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
             try:
                 token = auth_header.split(' ')[1]
             except IndexError:
                 return jsonify({'message': 'Invalid Authorization header'}), 401
-        
+
         if not token:
             return jsonify({'message': 'Token is missing'}), 401
-        
+
         payload = verify_token(token, token_type='access')
         if not payload:
             return jsonify({'message': 'Invalid or expired token'}), 401
-        
-        # Attach user details to request context
+
+        jti = payload.get('jti')
+        if not jti:
+            return jsonify({'message': 'Invalid token structure'}), 401
+
+        # Server-side denylist check — catches tokens revoked via /auth/logout
+        from app.db import query as _db_query
+        if _db_query('SELECT 1 FROM revoked_tokens WHERE jti = %s', (jti,)):
+            return jsonify({'message': 'Token has been revoked'}), 401
+
         g.user_id = payload['user_id']
         g.username = payload['username']
-        
+        g.jti = jti
+        g.token_exp = payload['exp']
+
         return f(*args, **kwargs)
-    
+
     return decorated
