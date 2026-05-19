@@ -4,3 +4,4 @@ argon2-cffi
 web3
 python-dotenv
 pyOpenSSL
+PyJWT
