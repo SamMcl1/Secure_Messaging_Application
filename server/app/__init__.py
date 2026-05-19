@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
 from .config import Config
 from .db import init_db, close_conn
@@ -15,6 +15,17 @@ def create_app(config_class=Config):
     from .routes import messages
     app.register_blueprint(auth)
     app.register_blueprint(messages, url_prefix='/messages')
+
+    @app.before_request
+    def enforce_json_content_type():
+        if request.method in ('POST', 'PUT', 'PATCH'):
+            ct = request.content_type or ''
+            if not ct.startswith('application/json'):
+                return jsonify({'message': 'Content-Type must be application/json'}), 415
+
+    @app.errorhandler(413)
+    def payload_too_large(_e):
+        return jsonify({'message': 'Request payload exceeds the 128 KB limit'}), 413
 
     @app.errorhandler(404)
     def not_found(_e):

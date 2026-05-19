@@ -14,6 +14,9 @@ class Config:
     # Direct PostgreSQL URL (psycopg2)
     DATABASE_URL = os.environ['DATABASE_URL']
 
+    # Payload size cap (enforced by Flask before any route runs)
+    MAX_CONTENT_LENGTH = 128 * 1024  # 128 KB
+
     # Blockchain
     SEPOLIA_RPC_URL = os.environ.get('SEPOLIA_RPC_URL', '')
     CONTRACT_ADDRESS = os.environ.get('CONTRACT_ADDRESS', '')
