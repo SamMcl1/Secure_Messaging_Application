@@ -6,16 +6,46 @@ import os
 
 
 def load_keys():
-    """Load RSA keys from files."""
+    """Load RSA keys from environment or files."""
+    private_key = os.environ.get('JWT_PRIVATE_KEY')
+    public_key = os.environ.get('JWT_PUBLIC_KEY')
+
+    if private_key and public_key:
+        if not private_key.strip() or not public_key.strip():
+            raise RuntimeError(
+                "JWT keys are configured but empty. Set non-empty JWT_PRIVATE_KEY and "
+                "JWT_PUBLIC_KEY environment variables."
+            )
+        return private_key, public_key
+
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     private_key_path = os.path.join(script_dir, 'certs', 'private_key.pem')
     public_key_path = os.path.join(script_dir, 'certs', 'public_key.pem')
-    
+
+    missing_paths = []
+    if not os.path.exists(private_key_path):
+        missing_paths.append(private_key_path)
+    if not os.path.exists(public_key_path):
+        missing_paths.append(public_key_path)
+
+    if missing_paths:
+        raise RuntimeError(
+            "JWT RSA key files are missing: {}. Provide both files at the default "
+            "certs location or set JWT_PRIVATE_KEY and JWT_PUBLIC_KEY environment "
+            "variables.".format(", ".join(missing_paths))
+        )
+
     with open(private_key_path, 'r') as f:
         private_key = f.read()
     with open(public_key_path, 'r') as f:
         public_key = f.read()
-    
+
+    if not private_key.strip() or not public_key.strip():
+        raise RuntimeError(
+            "JWT RSA key files are empty. Ensure both private_key.pem and "
+            "public_key.pem contain valid RSA keys."
+        )
+
     return private_key, public_key
 
 
