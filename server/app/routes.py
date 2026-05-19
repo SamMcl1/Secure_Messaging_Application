@@ -27,11 +27,11 @@ def send_message():
     if err:
         return err
 
-    if not User.get_by_id(body.recipient_id):
-        return jsonify({'message': 'Recipient not found'}), 404
-
     if body.recipient_id == g.user_id:
         return jsonify({'message': 'Cannot send a message to yourself'}), 400
+
+    if not User.get_by_id(body.recipient_id):
+        return jsonify({'message': 'Recipient not found'}), 404
 
     msg = Message.create(g.user_id, body.recipient_id, body.ciphertext, body.eph_pub)
     if not msg:
@@ -77,6 +77,9 @@ def forward_message(message_id):
     body, err = parse_body(ForwardMessageRequest)
     if err:
         return err
+
+    if body.recipient_id == g.user_id:
+        return jsonify({'message': 'Cannot forward a message to yourself'}), 400
 
     if not User.get_by_id(body.recipient_id):
         return jsonify({'message': 'Recipient not found'}), 404
