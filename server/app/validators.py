@@ -101,6 +101,7 @@ class LoginRequest(BaseModel):
         v = v.strip()
         if not v or len(v) > 64:
             raise ValueError('invalid username')
+        _reject_threats(v, 'username')
         return v
 
     @field_validator('password')
