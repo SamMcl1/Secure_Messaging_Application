@@ -57,8 +57,7 @@ def send_message():
     return jsonify({
         'message_id': msg.message_id,
         'sender_id': msg.sender_id,
-        'recipient_id': msg.recipient_id,
-        'created_at': msg.created_at
+        'recipient_id': msg.recipient_id
     }), 201
 
 
