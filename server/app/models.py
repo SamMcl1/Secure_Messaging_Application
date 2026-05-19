@@ -154,3 +154,21 @@ class RevokedToken:
             return True
         except Exception:
             return False
+
+    @staticmethod
+    def add_many(revocations):
+        """Record multiple revoked JWT JTIs atomically. Returns True on success, False on DB error."""
+        if not revocations:
+            return True
+        placeholders = ', '.join(['(%s, %s, %s)'] * len(revocations))
+        params = [value for revocation in revocations for value in revocation]
+        try:
+            execute(
+                f'''INSERT INTO revoked_tokens (jti, user_id, expires_at)
+                    VALUES {placeholders}
+                    ON CONFLICT (jti) DO NOTHING''',
+                tuple(params)
+            )
+            return True
+        except Exception:
+            return False

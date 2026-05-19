@@ -102,10 +102,10 @@ def logout():
     access_expires_at = datetime.fromtimestamp(g.token_exp, tz=timezone.utc)
     refresh_expires_at = datetime.fromtimestamp(refresh_exp, tz=timezone.utc)
 
-    if not RevokedToken.add(g.jti, g.user_id, access_expires_at):
-        return jsonify({'message': 'Failed to revoke token'}), 500
-
-    if not RevokedToken.add(refresh_jti, g.user_id, refresh_expires_at):
+    if not RevokedToken.add_many([
+        (g.jti, g.user_id, access_expires_at),
+        (refresh_jti, g.user_id, refresh_expires_at),
+    ]):
         return jsonify({'message': 'Failed to revoke token'}), 500
 
     return jsonify({'message': 'Logged out successfully'}), 200
