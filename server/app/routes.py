@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, g
 from app.models import Message, User
 from app.jwt_utils import token_required
 from app.validators import parse_body, SendMessageRequest, ForwardMessageRequest
+from app.extensions import limiter
 
 messages = Blueprint('messages', __name__)
 
@@ -19,6 +20,7 @@ def _can_manage_access(msg, user_id):
 
 
 @messages.route('/', methods=['POST'])
+@limiter.limit("60 per minute")
 @token_required
 def send_message():
     body, err = parse_body(SendMessageRequest)
@@ -40,6 +42,7 @@ def send_message():
 
 
 @messages.route('/', methods=['GET'])
+@limiter.limit("60 per minute")
 @token_required
 def list_messages():
     rows = Message.get_for_user(g.user_id)
@@ -47,6 +50,7 @@ def list_messages():
 
 
 @messages.route('/<int:message_id>', methods=['GET'])
+@limiter.limit("120 per minute")
 @token_required
 def get_message(message_id):
     msg = Message.get_by_id(message_id)
@@ -58,6 +62,7 @@ def get_message(message_id):
 
 
 @messages.route('/<int:message_id>/forward', methods=['POST'])
+@limiter.limit("30 per minute")
 @token_required
 def forward_message(message_id):
     msg = Message.get_by_id(message_id)
@@ -85,6 +90,7 @@ def forward_message(message_id):
 
 
 @messages.route('/<int:message_id>/access/<int:target_user_id>', methods=['POST'])
+@limiter.limit("30 per minute")
 @token_required
 def grant_access(message_id, target_user_id):
     msg = Message.get_by_id(message_id)
@@ -106,6 +112,7 @@ def grant_access(message_id, target_user_id):
 
 
 @messages.route('/<int:message_id>/access/<int:target_user_id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @token_required
 def revoke_access(message_id, target_user_id):
     msg = Message.get_by_id(message_id)

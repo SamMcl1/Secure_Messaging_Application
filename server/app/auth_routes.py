@@ -61,6 +61,7 @@ def login():
 
 
 @auth.route('/refresh', methods=['POST'])
+@limiter.limit("20 per minute")
 def refresh():
     body, err = parse_body(RefreshRequest)
     if err:
@@ -70,7 +71,16 @@ def refresh():
     if not payload:
         return jsonify({'message': 'Invalid or expired refresh token'}), 401
 
+    old_jti = payload.get('jti')
+    old_exp = payload.get('exp')
+    if not old_jti or not old_exp:
+        return jsonify({'message': 'Invalid refresh token structure'}), 401
+
     access_token, new_refresh_token = create_tokens(payload['user_id'], payload['username'])
+
+    expires_at = datetime.fromtimestamp(old_exp, tz=timezone.utc)
+    if not RevokedToken.add(old_jti, payload['user_id'], expires_at):
+        return jsonify({'message': 'Failed to rotate refresh token'}), 500
 
     return jsonify({
         'message': 'Token refreshed successfully',
@@ -112,6 +122,7 @@ def logout():
 
 
 @auth.route('/me', methods=['GET'])
+@limiter.limit("60 per minute")
 @token_required
 def get_current_user():
     user = User.get_by_id(g.user_id)
