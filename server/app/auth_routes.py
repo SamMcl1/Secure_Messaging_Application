@@ -1,39 +1,28 @@
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, jsonify, g
 from app.models import User
 from app.jwt_utils import create_tokens, verify_token, token_required
+from app.validators import parse_body, RegisterRequest, LoginRequest, RefreshRequest
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
 
 
 @auth.route('/register', methods=['POST'])
 def register():
-    """Register a new user."""
-    data = request.get_json()
-    
-    if not data or not data.get('username') or not data.get('password'):
-        return jsonify({'message': 'Username and password are required'}), 400
-    
-    username = data.get('username')
-    password = data.get('password')
-    public_key = data.get('public_key', '')
-    
-    # Check if username already exists
-    if User.get_by_username(username):
+    body, err = parse_body(RegisterRequest)
+    if err:
+        return err
+
+    if User.get_by_username(body.username):
         return jsonify({'message': 'Username already exists'}), 409
-    
-    # Create new user
-    user = User.create(username, password, public_key)
-    
+
+    user = User.create(body.username, body.password, body.public_key)
     if not user:
-        # Handle the race where another request created the same username
-        # after the pre-check but before the insert completed.
-        if User.get_by_username(username):
+        if User.get_by_username(body.username):
             return jsonify({'message': 'Username already exists'}), 409
         return jsonify({'message': 'Failed to create user'}), 500
-    
-    # Create tokens
+
     access_token, refresh_token = create_tokens(user.user_id, user.username)
-    
+
     return jsonify({
         'message': 'User registered successfully',
         'user_id': user.user_id,
@@ -46,24 +35,16 @@ def register():
 
 @auth.route('/login', methods=['POST'])
 def login():
-    """Login user."""
-    data = request.get_json()
-    
-    if not data or not data.get('username') or not data.get('password'):
-        return jsonify({'message': 'Username and password are required'}), 400
-    
-    username = data.get('username')
-    password = data.get('password')
-    
-    # Get user from database
-    user = User.get_by_username(username)
-    
-    if not user or not user.verify_password(password):
+    body, err = parse_body(LoginRequest)
+    if err:
+        return err
+
+    user = User.get_by_username(body.username)
+    if not user or not user.verify_password(body.password):
         return jsonify({'message': 'Invalid username or password'}), 401
-    
-    # Create tokens
+
     access_token, refresh_token = create_tokens(user.user_id, user.username)
-    
+
     return jsonify({
         'message': 'Login successful',
         'user_id': user.user_id,
@@ -76,26 +57,16 @@ def login():
 
 @auth.route('/refresh', methods=['POST'])
 def refresh():
-    """Refresh access token using refresh token."""
-    data = request.get_json()
-    
-    if not data or not data.get('refresh_token'):
-        return jsonify({'message': 'Refresh token is required'}), 400
-    
-    refresh_token = data.get('refresh_token')
-    
-    # Verify refresh token
-    payload = verify_token(refresh_token, token_type='refresh')
-    
+    body, err = parse_body(RefreshRequest)
+    if err:
+        return err
+
+    payload = verify_token(body.refresh_token, token_type='refresh')
     if not payload:
         return jsonify({'message': 'Invalid or expired refresh token'}), 401
-    
-    user_id = payload['user_id']
-    username = payload['username']
-    
-    # Create new tokens
-    access_token, new_refresh_token = create_tokens(user_id, username)
-    
+
+    access_token, new_refresh_token = create_tokens(payload['user_id'], payload['username'])
+
     return jsonify({
         'message': 'Token refreshed successfully',
         'access_token': access_token,
@@ -107,12 +78,10 @@ def refresh():
 @auth.route('/me', methods=['GET'])
 @token_required
 def get_current_user():
-    """Get current authenticated user."""
     user = User.get_by_id(g.user_id)
-    
     if not user:
         return jsonify({'message': 'User not found'}), 404
-    
+
     return jsonify({
         'user_id': user.user_id,
         'username': user.username,

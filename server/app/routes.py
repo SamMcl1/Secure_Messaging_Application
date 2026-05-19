@@ -1,6 +1,7 @@
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, jsonify, g
 from app.models import Message, User
 from app.jwt_utils import token_required
+from app.validators import parse_body, SendMessageRequest, ForwardMessageRequest
 
 messages = Blueprint('messages', __name__)
 
@@ -17,45 +18,17 @@ def _can_manage_access(msg, user_id):
     return msg['sender_id'] == user_id
 
 
-def _validate_recipient_id(value):
-    """Return (int, None) on success, (None, response) on failure."""
-    if not isinstance(value, int) or isinstance(value, bool):
-        return None, (jsonify({'message': 'recipient_id must be an integer'}), 400)
-    if value <= 0:
-        return None, (jsonify({'message': 'recipient_id must be a positive integer'}), 400)
-    return value, None
-
-
-def _validate_string_field(value, name):
-    """Return (str, None) on success, (None, response) on failure."""
-    if not isinstance(value, str) or not value.strip():
-        return None, (jsonify({'message': f'{name} must be a non-empty string'}), 400)
-    return value, None
-
-
 @messages.route('/', methods=['POST'])
 @token_required
 def send_message():
-    data = request.get_json()
-    if not data:
-        return jsonify({'message': 'Request body required'}), 400
-
-    recipient_id, err = _validate_recipient_id(data.get('recipient_id'))
+    body, err = parse_body(SendMessageRequest)
     if err:
         return err
 
-    ciphertext, err = _validate_string_field(data.get('ciphertext'), 'ciphertext')
-    if err:
-        return err
-
-    nonce, err = _validate_string_field(data.get('nonce'), 'nonce')
-    if err:
-        return err
-
-    if not User.get_by_id(recipient_id):
+    if not User.get_by_id(body.recipient_id):
         return jsonify({'message': 'Recipient not found'}), 404
 
-    msg = Message.create(g.user_id, recipient_id, ciphertext, nonce)
+    msg = Message.create(g.user_id, body.recipient_id, body.ciphertext, body.nonce)
     if not msg:
         return jsonify({'message': 'Failed to send message'}), 500
 
@@ -93,26 +66,14 @@ def forward_message(message_id):
     if not _can_access(msg, g.user_id):
         return jsonify({'message': 'Access denied'}), 403
 
-    data = request.get_json()
-    if not data:
-        return jsonify({'message': 'Request body required'}), 400
-
-    recipient_id, err = _validate_recipient_id(data.get('recipient_id'))
+    body, err = parse_body(ForwardMessageRequest)
     if err:
         return err
 
-    ciphertext, err = _validate_string_field(data.get('ciphertext'), 'ciphertext')
-    if err:
-        return err
-
-    nonce, err = _validate_string_field(data.get('nonce'), 'nonce')
-    if err:
-        return err
-
-    if not User.get_by_id(recipient_id):
+    if not User.get_by_id(body.recipient_id):
         return jsonify({'message': 'Recipient not found'}), 404
 
-    new_msg = Message.create(g.user_id, recipient_id, ciphertext, nonce)
+    new_msg = Message.create(g.user_id, body.recipient_id, body.ciphertext, body.nonce)
     if not new_msg:
         return jsonify({'message': 'Failed to forward message'}), 500
 
