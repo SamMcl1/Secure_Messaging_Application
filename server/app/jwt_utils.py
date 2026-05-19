@@ -3,6 +3,7 @@ import jwt
 from datetime import datetime, timedelta
 from functools import lru_cache, wraps
 from flask import request, jsonify, g
+from app.db import query as db_query
 import os
 
 
@@ -92,8 +93,7 @@ def verify_token(token, token_type='access', check_revoked=True):
             jti = payload.get('jti')
             if not jti:
                 return None
-            from app.db import query as _db_query
-            if _db_query('SELECT 1 FROM revoked_tokens WHERE jti = %s', (jti,)):
+            if db_query('SELECT 1 FROM revoked_tokens WHERE jti = %s', (jti,)):
                 return None
         return payload
     except jwt.ExpiredSignatureError:
