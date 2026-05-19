@@ -125,12 +125,15 @@ class Message:
 
     @staticmethod
     def revoke_access(message_id, user_id):
-        """Set revoked_at on an existing access grant. Returns True on success, False on DB error."""
+        """Set revoked_at on an existing access grant. Returns True only if a grant was revoked."""
         try:
-            execute(
-                'UPDATE message_access SET revoked_at = NOW() WHERE message_id = %s AND user_id = %s AND revoked_at IS NULL',
+            rows = query(
+                '''UPDATE message_access
+                   SET revoked_at = NOW()
+                   WHERE message_id = %s AND user_id = %s AND revoked_at IS NULL
+                   RETURNING message_id''',
                 (message_id, user_id)
             )
-            return True
+            return bool(rows)
         except Exception:
             return False
