@@ -27,6 +27,17 @@ CREATE TABLE IF NOT EXISTS message_access (
     PRIMARY KEY (message_id, user_id)
 );
 
+-- Server-side token denylist for logout / token revocation
+-- Entries whose expires_at < NOW() can be purged safely (the token is expired anyway)
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+    jti         TEXT PRIMARY KEY,
+    user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    revoked_at  TIMESTAMPTZ DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ NOT NULL
+);
+
+ALTER TABLE revoked_tokens ENABLE ROW LEVEL SECURITY;
+
 -- Stores on-chain records for tamper-evident verification
 CREATE TABLE IF NOT EXISTS blockchain_records (
     id           BIGSERIAL PRIMARY KEY,

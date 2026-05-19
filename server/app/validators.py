@@ -125,6 +125,19 @@ class RefreshRequest(BaseModel):
         return v
 
 
+class LogoutRequest(BaseModel):
+    model_config = ConfigDict(extra='ignore', strict=True)
+
+    refresh_token: str
+
+    @field_validator('refresh_token')
+    @classmethod
+    def token_valid(cls, v: str) -> str:
+        if not v or len(v) > 2048:
+            raise ValueError('invalid refresh_token')
+        return v
+
+
 class SendMessageRequest(BaseModel):
     model_config = ConfigDict(extra='ignore', strict=True)
 

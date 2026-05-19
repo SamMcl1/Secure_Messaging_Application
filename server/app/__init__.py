@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
 from .config import Config
 from .db import init_db, close_conn
+from .extensions import limiter
 
 
 def create_app(config_class=Config):
@@ -10,6 +11,7 @@ def create_app(config_class=Config):
 
     init_db(app)
     app.teardown_appcontext(close_conn)
+    limiter.init_app(app)
 
     from .auth_routes import auth
     from .routes import messages

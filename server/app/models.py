@@ -1,4 +1,4 @@
-from app.db import query, execute
+from app.db import query, execute, get_conn
 from app.password_utils import hash_password, verify_password
 
 
@@ -135,5 +135,40 @@ class Message:
                 (message_id, user_id)
             )
             return bool(rows)
+        except Exception:
+            return False
+
+
+class RevokedToken:
+
+    @staticmethod
+    def add(jti, user_id, expires_at):
+        """Record a revoked JWT JTI. Returns True on success, False on DB error."""
+        try:
+            execute(
+                '''INSERT INTO revoked_tokens (jti, user_id, expires_at)
+                   VALUES (%s, %s, %s)
+                   ON CONFLICT (jti) DO NOTHING''',
+                (jti, user_id, expires_at)
+            )
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def add_many(revocations):
+        """Record multiple revoked JWT JTIs atomically. Returns True on success, False on DB error."""
+        if not revocations:
+            return True
+        try:
+            conn = get_conn()
+            with conn.cursor() as cur:
+                cur.executemany(
+                    '''INSERT INTO revoked_tokens (jti, user_id, expires_at)
+                       VALUES (%s, %s, %s)
+                       ON CONFLICT (jti) DO NOTHING''',
+                    revocations
+                )
+            return True
         except Exception:
             return False
