@@ -1,107 +1,94 @@
-import sqlite3
-import os
+from app.db import query, execute
 from app.password_utils import hash_password, verify_password
 
 
-class Database:
-    """Database connection helper."""
-    
-    @staticmethod
-    def get_db():
-        """Get database connection."""
-        db_path = os.environ.get('DATABASE_PATH', 'database/hangover.db')
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
-    
-    @staticmethod
-    def init_db():
-        """Initialize database with schema."""
-        db_path = os.environ.get('DATABASE_PATH', 'database/hangover.db')
-        db_dir = os.path.dirname(db_path)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
-        
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        # Read and execute schema
-        schema_path = os.path.join(os.path.dirname(__file__), '..', 'database', 'schema.sql')
-        with open(schema_path, 'r') as f:
-            cursor.executescript(f.read())
-        
-        conn.commit()
-        conn.close()
-
-
 class User:
-    """User model for authentication."""
-    
+
     def __init__(self, username, password=None, public_key=None, user_id=None):
         self.user_id = user_id
         self.username = username
         self.password = password
         self.public_key = public_key
-    
+
     @staticmethod
     def create(username, password, public_key=''):
-        """Create a new user in the database."""
-        conn = Database.get_db()
-        cursor = conn.cursor()
-        
+        """Insert a new user into Supabase. Returns User on success, None if username taken."""
+        password_hash = hash_password(password)
         try:
-            password_hash = hash_password(password)
-            cursor.execute(
-                'INSERT INTO users (username, password_hash, public_key) VALUES (?, ?, ?)',
+            user_id = execute(
+                'INSERT INTO users (username, password_hash, public_key) VALUES (%s, %s, %s) RETURNING id',
                 (username, password_hash, public_key)
             )
-            conn.commit()
-            user_id = cursor.lastrowid
-            conn.close()
             return User(username, public_key=public_key, user_id=user_id)
-        except sqlite3.IntegrityError:
-            conn.close()
+        except Exception:
             return None
-    
+
     @staticmethod
     def get_by_username(username):
-        """Get user by username."""
-        conn = Database.get_db()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT id, username, password_hash, public_key FROM users WHERE username = ?', (username,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            user = User(row['username'], public_key=row['public_key'], user_id=row['id'])
-            user.password_hash = row['password_hash']
-            return user
-        return None
-    
+        """Fetch a user row by username. Returns User or None."""
+        rows = query(
+            'SELECT id, username, password_hash, public_key FROM users WHERE username = %s',
+            (username,)
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        user = User(row['username'], public_key=row['public_key'], user_id=row['id'])
+        user.password_hash = row['password_hash']
+        return user
+
     @staticmethod
     def get_by_id(user_id):
-        """Get user by ID."""
-        conn = Database.get_db()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT id, username, password_hash, public_key FROM users WHERE id = ?', (user_id,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            user = User(row['username'], public_key=row['public_key'], user_id=row['id'])
-            user.password_hash = row['password_hash']
-            return user
-        return None
-    
+        """Fetch a user row by ID. Returns User or None."""
+        rows = query(
+            'SELECT id, username, password_hash, public_key FROM users WHERE id = %s',
+            (user_id,)
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        user = User(row['username'], public_key=row['public_key'], user_id=row['id'])
+        user.password_hash = row['password_hash']
+        return user
+
     def verify_password(self, password):
-        """Verify password against stored hash."""
         if not hasattr(self, 'password_hash'):
             return False
         return verify_password(password, self.password_hash)
 
 
 class Message:
-    """Message model."""
-    pass
+
+    def __init__(self, message_id, sender_id, recipient_id, ciphertext, nonce, created_at=None):
+        self.message_id = message_id
+        self.sender_id = sender_id
+        self.recipient_id = recipient_id
+        self.ciphertext = ciphertext
+        self.nonce = nonce
+        self.created_at = created_at
+
+    @staticmethod
+    def create(sender_id, recipient_id, ciphertext, nonce):
+        """Insert a new message. Returns Message on success, None on failure."""
+        try:
+            message_id = execute(
+                'INSERT INTO messages (sender_id, recipient_id, ciphertext, nonce) VALUES (%s, %s, %s, %s) RETURNING id',
+                (sender_id, recipient_id, ciphertext, nonce)
+            )
+            return Message(message_id, sender_id, recipient_id, ciphertext, nonce)
+        except Exception:
+            return None
+
+    @staticmethod
+    def get_for_user(user_id):
+        """Return all messages sent to or from a user, newest first."""
+        return query(
+            'SELECT * FROM messages WHERE sender_id = %s OR recipient_id = %s ORDER BY created_at DESC',
+            (user_id, user_id)
+        )
+
+    @staticmethod
+    def get_by_id(message_id):
+        """Fetch a single message by ID."""
+        rows = query('SELECT * FROM messages WHERE id = %s', (message_id,))
+        return rows[0] if rows else None

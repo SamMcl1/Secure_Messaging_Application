@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, g
-from app.models import User, Database
+from app.models import User
 from app.jwt_utils import create_tokens, verify_token, token_required
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
