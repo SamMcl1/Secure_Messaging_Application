@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 from .config import Config
 from .db import init_db, close_conn
@@ -9,9 +10,24 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    if not app.config.get('SECRET_KEY'):
+        raise RuntimeError(
+            "SECRET_KEY environment variable must be set. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+
     init_db(app)
     app.teardown_appcontext(close_conn)
     limiter.init_app(app)
+
+    allowed_origin = app.config.get('ALLOWED_ORIGIN', '')
+    if allowed_origin:
+        CORS(
+            app,
+            origins=[allowed_origin],
+            methods=['GET', 'POST', 'DELETE'],
+            allow_headers=['Authorization', 'Content-Type'],
+        )
 
     from .auth_routes import auth
     from .routes import messages
