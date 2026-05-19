@@ -18,7 +18,9 @@ class Database:
     def init_db():
         """Initialize database with schema."""
         db_path = os.environ.get('DATABASE_PATH', 'database/hangover.db')
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
         
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
