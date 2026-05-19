@@ -25,6 +25,10 @@ def register():
     user = User.create(username, password, public_key)
     
     if not user:
+        # Handle the race where another request created the same username
+        # after the pre-check but before the insert completed.
+        if User.get_by_username(username):
+            return jsonify({'message': 'Username already exists'}), 409
         return jsonify({'message': 'Failed to create user'}), 500
     
     # Create tokens
