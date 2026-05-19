@@ -1,5 +1,5 @@
 import re
-from typing import Annotated, Optional
+from typing import Annotated
 
 from flask import request, jsonify
 from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationError
@@ -57,7 +57,6 @@ class RegisterRequest(BaseModel):
 
     username: str
     password: str
-    public_key: Optional[str] = ''
 
     @field_validator('username')
     @classmethod
@@ -80,13 +79,6 @@ class RegisterRequest(BaseModel):
         if len(v) > 128:
             raise ValueError('password must be 128 characters or fewer')
         return v
-
-    @field_validator('public_key')
-    @classmethod
-    def public_key_valid(cls, v: Optional[str]) -> str:
-        if v and len(v) > 4096:
-            raise ValueError('public_key must be 4096 characters or fewer')
-        return v or ''
 
 
 class LoginRequest(BaseModel):
