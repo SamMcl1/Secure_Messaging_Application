@@ -81,10 +81,16 @@ class Message:
 
     @staticmethod
     def get_for_user(user_id):
-        """Return all messages sent to or from a user, newest first."""
+        """Return all messages the user can access: sender, recipient, or explicitly granted."""
         return query(
-            'SELECT * FROM messages WHERE sender_id = %s OR recipient_id = %s ORDER BY created_at DESC',
-            (user_id, user_id)
+            '''SELECT * FROM messages
+               WHERE sender_id = %s OR recipient_id = %s
+                  OR id IN (
+                      SELECT message_id FROM message_access
+                      WHERE user_id = %s AND revoked_at IS NULL
+                  )
+               ORDER BY created_at DESC''',
+            (user_id, user_id, user_id)
         )
 
     @staticmethod
@@ -92,3 +98,42 @@ class Message:
         """Fetch a single message by ID."""
         rows = query('SELECT * FROM messages WHERE id = %s', (message_id,))
         return rows[0] if rows else None
+
+    @staticmethod
+    def has_access(message_id, user_id):
+        """Return True if user has a non-revoked explicit access grant."""
+        rows = query(
+            'SELECT 1 FROM message_access WHERE message_id = %s AND user_id = %s AND revoked_at IS NULL',
+            (message_id, user_id)
+        )
+        return bool(rows)
+
+    @staticmethod
+    def grant_access(message_id, user_id):
+        """Insert or restore an access grant for user. Returns True on success, False on DB error."""
+        try:
+            execute(
+                '''INSERT INTO message_access (message_id, user_id)
+                   VALUES (%s, %s)
+                   ON CONFLICT (message_id, user_id)
+                   DO UPDATE SET revoked_at = NULL, granted_at = NOW()''',
+                (message_id, user_id)
+            )
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def revoke_access(message_id, user_id):
+        """Set revoked_at on an existing access grant. Returns True only if a grant was revoked."""
+        try:
+            rows = query(
+                '''UPDATE message_access
+                   SET revoked_at = NOW()
+                   WHERE message_id = %s AND user_id = %s AND revoked_at IS NULL
+                   RETURNING message_id''',
+                (message_id, user_id)
+            )
+            return bool(rows)
+        except Exception:
+            return False
