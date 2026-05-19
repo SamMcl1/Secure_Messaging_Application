@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, jsonify, g
 from app.models import User, RevokedToken
 from app.jwt_utils import create_tokens, verify_token, token_required
-from app.validators import parse_body, RegisterRequest, LoginRequest, RefreshRequest
+from app.validators import parse_body, RegisterRequest, LoginRequest, RefreshRequest, LogoutRequest
 from app.extensions import limiter
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
@@ -83,9 +83,31 @@ def refresh():
 @auth.route('/logout', methods=['POST'])
 @token_required
 def logout():
-    expires_at = datetime.fromtimestamp(g.token_exp, tz=timezone.utc)
-    if not RevokedToken.add(g.jti, g.user_id, expires_at):
+    body, err = parse_body(LogoutRequest)
+    if err:
+        return err
+
+    refresh_payload = verify_token(body.refresh_token, token_type='refresh')
+    if not refresh_payload:
+        return jsonify({'message': 'Invalid or expired refresh token'}), 401
+
+    if refresh_payload.get('user_id') != g.user_id:
+        return jsonify({'message': 'Refresh token does not match authenticated user'}), 401
+
+    refresh_jti = refresh_payload.get('jti')
+    refresh_exp = refresh_payload.get('exp')
+    if not refresh_jti or not refresh_exp:
+        return jsonify({'message': 'Invalid refresh token structure'}), 401
+
+    access_expires_at = datetime.fromtimestamp(g.token_exp, tz=timezone.utc)
+    refresh_expires_at = datetime.fromtimestamp(refresh_exp, tz=timezone.utc)
+
+    if not RevokedToken.add(g.jti, g.user_id, access_expires_at):
         return jsonify({'message': 'Failed to revoke token'}), 500
+
+    if not RevokedToken.add(refresh_jti, g.user_id, refresh_expires_at):
+        return jsonify({'message': 'Failed to revoke token'}), 500
+
     return jsonify({'message': 'Logged out successfully'}), 200
 
 
