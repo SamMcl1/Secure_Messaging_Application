@@ -5,7 +5,16 @@ load_dotenv()
 
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'change-this-in-production')
+    # Flask session signing key — must be set; no insecure fallback
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+
+    # Debug — reads FLASK_DEBUG env var; defaults off so prod stays safe
+    DEBUG = os.getenv('FLASK_DEBUG', '0') == '1'
+
+    # CORS — set to the exact client origin (e.g. https://app.example.com).
+    # Use "null" for file:// local development.
+    # Leave unset to deny all cross-origin requests.
+    ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '')
 
     # Supabase
     SUPABASE_URL = os.environ['SUPABASE_URL']
