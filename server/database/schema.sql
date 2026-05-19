@@ -2,11 +2,14 @@
 -- Run once via Supabase SQL editor or psql
 
 CREATE TABLE IF NOT EXISTS users (
-    id           BIGSERIAL PRIMARY KEY,
-    username     TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    public_key   TEXT NOT NULL,
-    created_at   TIMESTAMPTZ DEFAULT NOW()
+    id                    BIGSERIAL PRIMARY KEY,
+    username              TEXT UNIQUE NOT NULL,
+    password_hash         TEXT NOT NULL,
+    public_key            TEXT NOT NULL,
+    -- Argon2id → HKDF → AES-256-GCM encrypted X25519 private key envelope (base64 JSON).
+    -- Only the user can decrypt this with their password; server never sees raw sk.
+    encrypted_private_key TEXT,
+    created_at            TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS messages (
