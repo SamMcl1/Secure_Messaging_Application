@@ -80,7 +80,7 @@ def create_tokens(user_id, username):
     return access_token, refresh_token
 
 
-def verify_token(token, token_type='access'):
+def verify_token(token, token_type='access', check_revoked=True):
     """Verify and decode a JWT token."""
     _, public_key = load_keys()
 
@@ -88,6 +88,13 @@ def verify_token(token, token_type='access'):
         payload = jwt.decode(token, public_key, algorithms=['RS256'])
         if payload.get('type') != token_type:
             return None
+        if check_revoked:
+            jti = payload.get('jti')
+            if not jti:
+                return None
+            from app.db import query as _db_query
+            if _db_query('SELECT 1 FROM revoked_tokens WHERE jti = %s', (jti,)):
+                return None
         return payload
     except jwt.ExpiredSignatureError:
         return None
@@ -118,11 +125,6 @@ def token_required(f):
         jti = payload.get('jti')
         if not jti:
             return jsonify({'message': 'Invalid token structure'}), 401
-
-        # Server-side denylist check — catches tokens revoked via /auth/logout
-        from app.db import query as _db_query
-        if _db_query('SELECT 1 FROM revoked_tokens WHERE jti = %s', (jti,)):
-            return jsonify({'message': 'Token has been revoked'}), 401
 
         g.user_id = payload['user_id']
         g.username = payload['username']
