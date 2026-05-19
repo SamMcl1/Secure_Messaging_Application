@@ -1,10 +1,11 @@
 import jwt
 from datetime import datetime, timedelta
-from functools import wraps
-from flask import request, jsonify, current_app
+from functools import lru_cache, wraps
+from flask import request, jsonify, g
 import os
 
 
+@lru_cache(maxsize=1)
 def load_keys():
     """Load RSA keys from environment or files."""
     private_key = os.environ.get('JWT_PRIVATE_KEY')
@@ -116,9 +117,9 @@ def token_required(f):
         if not payload:
             return jsonify({'message': 'Invalid or expired token'}), 401
         
-        # Attach user_id to request context
-        request.user_id = payload['user_id']
-        request.username = payload['username']
+        # Attach user details to request context
+        g.user_id = payload['user_id']
+        g.username = payload['username']
         
         return f(*args, **kwargs)
     

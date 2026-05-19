@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from app.models import User, Database
 from app.jwt_utils import create_tokens, verify_token, token_required
 
@@ -108,7 +108,7 @@ def refresh():
 @token_required
 def get_current_user():
     """Get current authenticated user."""
-    user = User.get_by_id(request.user_id)
+    user = User.get_by_id(g.user_id)
     
     if not user:
         return jsonify({'message': 'User not found'}), 404
