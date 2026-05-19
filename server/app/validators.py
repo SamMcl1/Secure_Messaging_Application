@@ -53,7 +53,7 @@ StrictPosInt = Annotated[int, Field(strict=True, gt=0)]
 
 # Request models
 class RegisterRequest(BaseModel):
-    model_config = ConfigDict(extra='ignore', strict=False)
+    model_config = ConfigDict(extra='ignore', strict=True)
 
     username: str
     password: str
@@ -90,7 +90,7 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    model_config = ConfigDict(extra='ignore', strict=False)
+    model_config = ConfigDict(extra='ignore', strict=True)
 
     username: str
     password: str
@@ -112,7 +112,7 @@ class LoginRequest(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    model_config = ConfigDict(extra='ignore', strict=False)
+    model_config = ConfigDict(extra='ignore', strict=True)
 
     refresh_token: str
 
@@ -125,7 +125,7 @@ class RefreshRequest(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    model_config = ConfigDict(extra='ignore', strict=False)
+    model_config = ConfigDict(extra='ignore', strict=True)
 
     recipient_id: StrictPosInt
     ciphertext: str
