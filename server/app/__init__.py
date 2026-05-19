@@ -18,7 +18,7 @@ def create_app(config_class=Config):
 
     @app.before_request
     def enforce_json_content_type():
-        if request.method in ('POST', 'PUT', 'PATCH'):
+        if request.method in ('POST', 'PUT', 'PATCH') and (request.content_length or 0) > 0:
             ct = request.content_type or ''
             if not ct.startswith('application/json'):
                 return jsonify({'message': 'Content-Type must be application/json'}), 415
