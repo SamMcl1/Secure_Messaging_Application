@@ -143,7 +143,7 @@ class SendMessageRequest(BaseModel):
 
     recipient_id: StrictPosInt
     ciphertext: str
-    nonce: str
+    eph_pub: str
 
     @field_validator('ciphertext')
     @classmethod
@@ -156,15 +156,15 @@ class SendMessageRequest(BaseModel):
             raise ValueError('ciphertext must be valid base64')
         return v
 
-    @field_validator('nonce')
+    @field_validator('eph_pub')
     @classmethod
-    def nonce_valid(cls, v: str) -> str:
+    def eph_pub_valid(cls, v: str) -> str:
         if not v:
-            raise ValueError('nonce must not be empty')
+            raise ValueError('eph_pub must not be empty')
         if len(v) > 256:
-            raise ValueError('nonce must be 256 characters or fewer')
+            raise ValueError('eph_pub must be 256 characters or fewer')
         if not _BASE64.fullmatch(v):
-            raise ValueError('nonce must be valid base64')
+            raise ValueError('eph_pub must be valid base64')
         return v
 
 

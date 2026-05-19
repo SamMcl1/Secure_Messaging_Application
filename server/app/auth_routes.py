@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, g
@@ -5,6 +6,7 @@ from app.models import User, RevokedToken
 from app.jwt_utils import create_tokens, verify_token, token_required
 from app.validators import parse_body, RegisterRequest, LoginRequest, RefreshRequest, LogoutRequest
 from app.extensions import limiter
+from app.crypto import generate_keypair, encrypt_private_key
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -19,7 +21,13 @@ def register():
     if User.get_by_username(body.username):
         return jsonify({'message': 'Username already exists'}), 409
 
-    user = User.create(body.username, body.password, body.public_key)
+    # Server generates X25519 keypair — public key published for TOFU lookup,
+    # private key wrapped under the user's password and never stored raw.
+    sk_bytes, pk_bytes = generate_keypair()
+    public_key = base64.b64encode(pk_bytes).decode()
+    encrypted_private_key = encrypt_private_key(sk_bytes, body.password)
+
+    user = User.create(body.username, body.password, public_key, encrypted_private_key)
     if not user:
         if User.get_by_username(body.username):
             return jsonify({'message': 'Username already exists'}), 409
@@ -31,9 +39,11 @@ def register():
         'message': 'User registered successfully',
         'user_id': user.user_id,
         'username': user.username,
+        'public_key': user.public_key,
+        'encrypted_private_key': user.encrypted_private_key,
         'access_token': access_token,
         'refresh_token': refresh_token,
-        'token_type': 'Bearer'
+        'token_type': 'Bearer',
     }), 201
 
 
@@ -54,9 +64,11 @@ def login():
         'message': 'Login successful',
         'user_id': user.user_id,
         'username': user.username,
+        'public_key': user.public_key,
+        'encrypted_private_key': user.encrypted_private_key,
         'access_token': access_token,
         'refresh_token': refresh_token,
-        'token_type': 'Bearer'
+        'token_type': 'Bearer',
     }), 200
 
 
@@ -86,7 +98,7 @@ def refresh():
         'message': 'Token refreshed successfully',
         'access_token': access_token,
         'refresh_token': new_refresh_token,
-        'token_type': 'Bearer'
+        'token_type': 'Bearer',
     }), 200
 
 
@@ -132,5 +144,21 @@ def get_current_user():
     return jsonify({
         'user_id': user.user_id,
         'username': user.username,
-        'public_key': user.public_key
+        'public_key': user.public_key,
+        'encrypted_private_key': user.encrypted_private_key,
+    }), 200
+
+
+@auth.route('/users/<username>/pubkey', methods=['GET'])
+@limiter.limit("60 per minute")
+@token_required
+def get_pubkey(username):
+    """Return a user's X25519 public key for TOFU key establishment."""
+    user = User.get_by_username(username)
+    if not user:
+        return jsonify({'message': 'User not found'}), 404
+
+    return jsonify({
+        'username': user.username,
+        'public_key': user.public_key,
     }), 200

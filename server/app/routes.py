@@ -15,7 +15,7 @@ def _can_access(msg, user_id):
 
 
 def _can_manage_access(msg, user_id):
-    """True only for users allowed to manage access grants."""
+    """True only for the original sender."""
     return msg['sender_id'] == user_id
 
 
@@ -30,14 +30,17 @@ def send_message():
     if not User.get_by_id(body.recipient_id):
         return jsonify({'message': 'Recipient not found'}), 404
 
-    msg = Message.create(g.user_id, body.recipient_id, body.ciphertext, body.nonce)
+    if body.recipient_id == g.user_id:
+        return jsonify({'message': 'Cannot send a message to yourself'}), 400
+
+    msg = Message.create(g.user_id, body.recipient_id, body.ciphertext, body.eph_pub)
     if not msg:
         return jsonify({'message': 'Failed to send message'}), 500
 
     return jsonify({
         'message_id': msg.message_id,
         'sender_id': msg.sender_id,
-        'recipient_id': msg.recipient_id
+        'recipient_id': msg.recipient_id,
     }), 201
 
 
@@ -78,14 +81,14 @@ def forward_message(message_id):
     if not User.get_by_id(body.recipient_id):
         return jsonify({'message': 'Recipient not found'}), 404
 
-    new_msg = Message.create(g.user_id, body.recipient_id, body.ciphertext, body.nonce)
+    new_msg = Message.create(g.user_id, body.recipient_id, body.ciphertext, body.eph_pub)
     if not new_msg:
         return jsonify({'message': 'Failed to forward message'}), 500
 
     return jsonify({
         'message_id': new_msg.message_id,
         'sender_id': new_msg.sender_id,
-        'recipient_id': new_msg.recipient_id
+        'recipient_id': new_msg.recipient_id,
     }), 201
 
 
