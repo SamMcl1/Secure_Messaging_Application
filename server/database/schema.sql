@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     recipient_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     ciphertext   TEXT NOT NULL,
-    nonce        TEXT NOT NULL,
+    -- eph_pub: sender's ephemeral X25519 public key (32 B, base64).
+    -- The AES-GCM nonce is derived from the HPKE KDF context, not stored.
+    eph_pub      TEXT NOT NULL,
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 

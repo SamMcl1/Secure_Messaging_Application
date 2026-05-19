@@ -59,23 +59,23 @@ class User:
 
 class Message:
 
-    def __init__(self, message_id, sender_id, recipient_id, ciphertext, nonce, created_at=None):
+    def __init__(self, message_id, sender_id, recipient_id, ciphertext, eph_pub, created_at=None):
         self.message_id = message_id
         self.sender_id = sender_id
         self.recipient_id = recipient_id
         self.ciphertext = ciphertext
-        self.nonce = nonce
+        self.eph_pub = eph_pub
         self.created_at = created_at
 
     @staticmethod
-    def create(sender_id, recipient_id, ciphertext, nonce):
+    def create(sender_id, recipient_id, ciphertext, eph_pub):
         """Insert a new message. Returns Message on success, None on failure."""
         try:
             message_id = execute(
-                'INSERT INTO messages (sender_id, recipient_id, ciphertext, nonce) VALUES (%s, %s, %s, %s) RETURNING id',
-                (sender_id, recipient_id, ciphertext, nonce)
+                'INSERT INTO messages (sender_id, recipient_id, ciphertext, eph_pub) VALUES (%s, %s, %s, %s) RETURNING id',
+                (sender_id, recipient_id, ciphertext, eph_pub)
             )
-            return Message(message_id, sender_id, recipient_id, ciphertext, nonce)
+            return Message(message_id, sender_id, recipient_id, ciphertext, eph_pub)
         except Exception:
             return None
 
