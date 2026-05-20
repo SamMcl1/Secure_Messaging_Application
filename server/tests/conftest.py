@@ -236,8 +236,11 @@ def expired_server(tmp_path_factory):
         f.write(ca_pem)
 
     url, httpd = _start_tls_server(cert_pem, key_pem, tmp_dir)
-    yield url, ca_path
-    httpd.shutdown()
+    try:
+        yield url, ca_path
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
 
 
 @pytest.fixture(scope="module")
@@ -256,5 +259,8 @@ def trusted_server(tmp_path_factory):
         f.write(ca_pem)
 
     url, httpd = _start_tls_server(cert_pem, key_pem, tmp_dir)
-    yield url, ca_path
-    httpd.shutdown()
+    try:
+        yield url, ca_path
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
