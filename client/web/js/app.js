@@ -293,7 +293,7 @@ function renderMessages(messages) {
     list.innerHTML = '';
 
     if (!messages.length) {
-        list.innerHTML = '<li class="empty">No messages yet.</li>';
+        list.innerHTML = '<li class="li-empty">No messages yet.</li>';
         return;
     }
 
