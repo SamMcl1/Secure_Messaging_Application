@@ -212,8 +212,11 @@ def self_signed_server(tmp_path_factory):
     tmp_dir = str(tmp_path_factory.mktemp("self_signed"))
     cert_pem, key_pem = gen_self_signed()
     url, httpd = _start_tls_server(cert_pem, key_pem, tmp_dir)
-    yield url
-    httpd.shutdown()
+    try:
+        yield url
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
 
 
 @pytest.fixture(scope="module")
