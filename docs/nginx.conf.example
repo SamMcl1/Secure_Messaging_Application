@@ -1,0 +1,48 @@
+# Nginx reverse-proxy config for hangover.theburkenator.com
+#
+# Place this at /etc/nginx/sites-available/hangover and symlink:
+#   sudo ln -s /etc/nginx/sites-available/hangover /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# This config assumes:
+#   - Gunicorn is running on 127.0.0.1:8000  (see server/wsgi.py)
+#   - Let's Encrypt cert is in place          (run certbot first)
+#   - Flask FORCE_HTTPS=1 and TRUSTED_PROXY_COUNT=1 are set in server/.env
+#
+# To get the Let's Encrypt cert:
+#   sudo certbot --nginx -d hangover.theburkenator.com
+
+server {
+    listen 80;
+    server_name hangover.theburkenator.com;
+
+    # Redirect all HTTP to HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name hangover.theburkenator.com;
+
+    # --- TLS (populated by certbot) ---
+    ssl_certificate     /etc/letsencrypt/live/hangover.theburkenator.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/hangover.theburkenator.com/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    # --- PT-04: hide upstream Server header ---
+    server_tokens off;                          # removes Nginx version from its own header
+    proxy_hide_header Server;                   # strip Werkzeug/Gunicorn header from upstream
+                                                # Nginx will still send its own Server header
+
+    # --- proxy to Gunicorn ---
+    location / {
+        proxy_pass         http://127.0.0.1:8000;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;   # used by ProxyFix (PT-02)
+        proxy_set_header   X-Forwarded-Proto $scheme;                       # used by FORCE_HTTPS / HSTS
+        proxy_read_timeout 30s;
+        proxy_send_timeout 30s;
+    }
+}
