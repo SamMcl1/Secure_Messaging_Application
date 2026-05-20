@@ -1,12 +1,9 @@
 'use strict';
 
-// ── Byte / base64 utilities ───────────────────────────────────────────────
-
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
 function b64ToBytes(b64) {
-    // Accept both standard (+/) and URL-safe (-_) base64.
     const std = b64.replace(/-/g, '+').replace(/_/g, '/');
     const bin = atob(std);
     const out = new Uint8Array(bin.length);
@@ -28,8 +25,7 @@ function concatBytes(...arrays) {
     return out;
 }
 
-// ── HKDF ─────────────────────────────────────────────────────────────────
-
+// HKDF-SHA256 wrapper around the Web Crypto API
 async function hkdfDerive(ikm, length, info, salt = null) {
     const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
     const bits = await crypto.subtle.deriveBits(
@@ -40,19 +36,11 @@ async function hkdfDerive(ikm, length, info, salt = null) {
     return new Uint8Array(bits);
 }
 
-// ── HPKE Mode_Auth-inspired seal ─────────────────────────────────────────
-//
-// Mirrors server/app/crypto.py :: hpke_seal byte-for-byte.
-//
-// Construction:
-//   dh1 = X25519(eph_sk,    recipient_pk)   — KEM secrecy
-//   dh2 = X25519(sender_sk, recipient_pk)   — sender authentication
-//   ikm = dh1 || dh2
-//   kem_context = eph_pub || sender_pk || recipient_pk
-//   key   = HKDF-SHA256(ikm, 32, "SecureMsg-v1-key"   || kem_context)
-//   nonce = HKDF-SHA256(ikm, 12, "SecureMsg-v1-nonce" || kem_context)
-//   ciphertext = AES-256-GCM.Seal(key, nonce, plaintext, aad)
-
+// Encrypt a message for a recipient using two X25519 DH operations.
+// dh1 uses a fresh ephemeral key (gives forward secrecy per-message).
+// dh2 uses the sender's static key (proves who sent it).
+// Both outputs are combined and fed into HKDF to produce the AES key and nonce.
+// Must match server/app/crypto.py hpke_seal exactly — same info strings, same order.
 async function hpkeSeal(senderSkKey, senderPkBytes, recipientPkBytes, plaintext, aad = new Uint8Array(0)) {
     const eph = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
     const ephPubBytes = new Uint8Array(await crypto.subtle.exportKey('raw', eph.publicKey));
@@ -68,7 +56,7 @@ async function hpkeSeal(senderSkKey, senderPkBytes, recipientPkBytes, plaintext,
         { name: 'X25519', public: recipientPkKey }, senderSkKey, 256,
     ));
 
-    const ikm        = concatBytes(dh1, dh2);
+    const ikm = concatBytes(dh1, dh2);
     const kemContext = concatBytes(ephPubBytes, senderPkBytes, recipientPkBytes);
 
     const key   = await hkdfDerive(ikm, 32, concatBytes(enc.encode('SecureMsg-v1-key'),   kemContext));
@@ -83,10 +71,8 @@ async function hpkeSeal(senderSkKey, senderPkBytes, recipientPkBytes, plaintext,
     };
 }
 
-// ── HPKE Mode_Auth-inspired open ─────────────────────────────────────────
-//
-// Mirrors server/app/crypto.py :: hpke_open byte-for-byte.
-
+// Decrypt a message. Reverses hpkeSeal — recipient runs the same two DHs
+// (swapping their private key in place of the sender's) to recover the same key/nonce.
 async function hpkeOpen(recipientSkKey, recipientPkBytes, senderPkBytes, ephPubB64, ciphertextB64, aad = new Uint8Array(0)) {
     const ephPubBytes = b64ToBytes(ephPubB64);
     const ciphertext  = b64ToBytes(ciphertextB64);
@@ -101,7 +87,7 @@ async function hpkeOpen(recipientSkKey, recipientPkBytes, senderPkBytes, ephPubB
         { name: 'X25519', public: senderPkKey }, recipientSkKey, 256,
     ));
 
-    const ikm        = concatBytes(dh1, dh2);
+    const ikm = concatBytes(dh1, dh2);
     const kemContext = concatBytes(ephPubBytes, senderPkBytes, recipientPkBytes);
 
     const key   = await hkdfDerive(ikm, 32, concatBytes(enc.encode('SecureMsg-v1-key'),   kemContext));
@@ -113,22 +99,16 @@ async function hpkeOpen(recipientSkKey, recipientPkBytes, senderPkBytes, ephPubB
     return dec.decode(ptBuf);
 }
 
-// ── Private key decryption (Argon2id → HKDF → AES-256-GCM) ──────────────
-//
-// Mirrors server/app/crypto.py :: decrypt_private_key.
-// Requires argon2-browser (window.argon2) loaded by the HTML page.
-//
-// Argon2id parameters match the server exactly:
-//   time=3, mem=65536 KiB, parallelism=4, hashLen=32
-
+// Decrypt the private key envelope stored in the database.
+// The server encrypted it with Argon2id(password) → HKDF → AES-256-GCM at registration.
+// We use the same parameters here so the two sides produce the same key.
 async function decryptPrivateKey(envelopeB64, password) {
-    if (!window.argon2) throw new Error('argon2-browser not loaded — check CDN connectivity');
-
     const envelope = JSON.parse(dec.decode(b64ToBytes(envelopeB64)));
     const salt  = b64ToBytes(envelope.salt);
     const nonce = b64ToBytes(envelope.nonce);
     const ct    = b64ToBytes(envelope.ct);
 
+    // Argon2id params must match server/app/crypto.py exactly
     const result = await window.argon2.hash({
         pass:        password,
         salt,
@@ -139,10 +119,7 @@ async function decryptPrivateKey(envelopeB64, password) {
         type:        window.argon2.ArgonType.Argon2id,
     });
 
-    const prk = result.hash;   // Uint8Array(32)
-
-    // HKDF domain-separated from server-side password verification.
-    const key = await hkdfDerive(prk, 32, enc.encode('SecureMsg-v1-key-protection'));
+    const key = await hkdfDerive(result.hash, 32, enc.encode('SecureMsg-v1-key-protection'));
 
     const aesKey = await crypto.subtle.importKey('raw', key, { name: 'AES-GCM' }, false, ['decrypt']);
     const skBuf  = await crypto.subtle.decrypt(
@@ -151,30 +128,23 @@ async function decryptPrivateKey(envelopeB64, password) {
         ct,
     );
 
-    return new Uint8Array(skBuf);   // raw 32-byte X25519 private key
+    return new Uint8Array(skBuf);
 }
 
-// ── keccak256 content hash (blockchain integrity) ─────────────────────────
-//
-// Requires js-sha3 (window.sha3_256 / keccak256) loaded by the HTML page.
-// Returns a 0x-prefixed hex string suitable for the content_hash field.
-
+// Hash the plaintext with keccak256 so the server can record it on-chain.
+// We use js-sha3 because Web Crypto doesn't support keccak.
 function keccak256Hex(bytes) {
-    if (!window.sha3 || typeof window.sha3.keccak_256 !== 'function') {
-        throw new Error('js-sha3 not loaded — blockchain content hash unavailable');
-    }
     return '0x' + window.sha3.keccak_256(bytes);
 }
 
-// ── Session state (all keys kept in memory, never persisted) ─────────────
-
+// Session — kept in memory only, cleared on logout
 const session = {
     userId:         null,
     username:       null,
     accessToken:    null,
     refreshToken:   null,
-    publicKeyBytes: null,   // Uint8Array(32)  — our own X25519 public key
-    privateKey:     null,   // CryptoKey       — X25519 private key, usage: deriveBits
+    publicKeyBytes: null,
+    privateKey:     null,
 };
 
 function isLoggedIn() { return !!session.accessToken; }
@@ -196,10 +166,8 @@ function clearSession() {
     for (const k of Object.keys(session)) session[k] = null;
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────
-
-// Set to the server origin when the client is not served from the same host.
-// e.g. 'https://hangover.theburkenator.com'
+// API base — leave empty when the client is served from the same host as the server.
+// Set to the server URL (e.g. 'http://localhost:5000') if running separately.
 const API_BASE = '';
 
 async function apiFetch(path, options = {}) {
@@ -214,8 +182,6 @@ async function apiFetch(path, options = {}) {
     }
     return body;
 }
-
-// ── Auth ──────────────────────────────────────────────────────────────────
 
 async function register(username, password) {
     const data = await apiFetch('/auth/register', {
@@ -245,22 +211,17 @@ async function logout() {
     }
 }
 
-// ── Recipient lookup ──────────────────────────────────────────────────────
-
 async function lookupRecipient(username) {
-    // GET /auth/users/<username>/pubkey now returns user_id too (updated in auth_routes.py).
     return apiFetch(`/auth/users/${encodeURIComponent(username)}/pubkey`);
 }
 
-// ── Messages ──────────────────────────────────────────────────────────────
-
 async function sendMessage(recipientUsername, plaintext) {
     const recipient = await lookupRecipient(recipientUsername);
-
     const recipientPkBytes = b64ToBytes(recipient.public_key);
     const plaintextBytes   = enc.encode(plaintext);
 
-    // Compute keccak256 of plaintext for tamper-evident on-chain record.
+    // Compute keccak256 of the plaintext before encrypting so the server can
+    // record it on the blockchain. Falls back gracefully if js-sha3 isn't loaded.
     let contentHash = null;
     try { contentHash = keccak256Hex(plaintextBytes); } catch { /* blockchain optional */ }
 
@@ -290,8 +251,8 @@ async function getMessages() {
         let plaintext;
 
         if (msg.sender_id === session.userId) {
-            // Sender cannot re-decrypt their own ciphertext — ephemeral key is gone.
-            // This is an expected E2EE property, not a bug.
+            // The ephemeral key used to encrypt this message was never stored,
+            // so we can't decrypt it. This is expected — it's how E2EE works.
             plaintext = '[Sent message — E2EE: plaintext not stored server-side]';
         } else {
             try {
@@ -313,8 +274,6 @@ async function getMessages() {
 
     return results;
 }
-
-// ── UI helpers ────────────────────────────────────────────────────────────
 
 function escapeHtml(str) {
     return String(str)
@@ -340,9 +299,7 @@ function renderMessages(messages) {
 
     for (const msg of messages) {
         const li   = document.createElement('li');
-        const time = msg.created_at
-            ? new Date(msg.created_at).toLocaleString()
-            : '';
+        const time = msg.created_at ? new Date(msg.created_at).toLocaleString() : '';
         const direction = msg.sender_id === session.userId
             ? `→ <strong>${escapeHtml(msg.recipient_username)}</strong>`
             : `← <strong>${escapeHtml(msg.sender_username)}</strong>`;
@@ -372,8 +329,6 @@ function switchToAuth() {
     document.getElementById('login-view').hidden    = false;
     document.getElementById('register-view').hidden = true;
 }
-
-// ── Wire event listeners ──────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -444,7 +399,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Allow Enter key to submit login / register
     ['login-password', 'reg-password'].forEach(id => {
         document.getElementById(id).addEventListener('keydown', e => {
             if (e.key === 'Enter') {
