@@ -130,12 +130,16 @@ class LogoutRequest(BaseModel):
         return v
 
 
+_HEX32 = re.compile(r'^(?:0x)?[0-9a-fA-F]{64}$')
+
+
 class SendMessageRequest(BaseModel):
     model_config = ConfigDict(extra='ignore', strict=True)
 
     recipient_id: StrictPosInt
     ciphertext: str
     eph_pub: str
+    content_hash: str | None = None  # optional keccak256 of plaintext for blockchain
 
     @field_validator('ciphertext')
     @classmethod
@@ -158,6 +162,15 @@ class SendMessageRequest(BaseModel):
         if not _BASE64.fullmatch(v):
             raise ValueError('eph_pub must be valid base64')
         return v
+
+    @field_validator('content_hash')
+    @classmethod
+    def content_hash_valid(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        if not _HEX32.fullmatch(v):
+            raise ValueError('content_hash must be a 0x-prefixed 32-byte hex string')
+        return v.lower() if v.startswith('0x') else '0x' + v.lower()
 
 
 ForwardMessageRequest = SendMessageRequest

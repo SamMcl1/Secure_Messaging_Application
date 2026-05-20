@@ -159,6 +159,7 @@ def get_pubkey(username):
         return jsonify({'message': 'User not found'}), 404
 
     return jsonify({
-        'username': user.username,
+        'user_id':    user.user_id,
+        'username':   user.username,
         'public_key': user.public_key,
     }), 200
