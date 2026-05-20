@@ -3,11 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'">
     <title>Secure Messaging</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
+<!-- ── Authentication panel ─────────────────────────────────────────── -->
+<div id="auth-panel">
     <h1>Secure Messaging</h1>
-    <script src="js/app.js"></script>
+    <p class="tagline">End-to-end encrypted · HPKE Mode_Auth · AES-256-GCM</p>
+
+    <div id="login-view">
+        <h2>Log in</h2>
+        <input type="text"     id="login-username" placeholder="Username" autocomplete="username">
+        <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+        <button id="login-btn">Log in</button>
+        <p class="switch">No account? <a href="#" id="show-register">Register</a></p>
+    </div>
+
+    <div id="register-view" hidden>
+        <h2>Register</h2>
+        <input type="text"     id="reg-username" placeholder="Username" autocomplete="username">
+        <input type="password" id="reg-password" placeholder="Password (min 8 chars)" autocomplete="new-password">
+        <button id="register-btn">Create account</button>
+        <p class="switch">Already registered? <a href="#" id="show-login">Log in</a></p>
+    </div>
+
+    <p id="auth-error" class="error" hidden></p>
+</div>
+
+<!-- ── Main app ──────────────────────────────────────────────────────── -->
+<div id="app-panel" hidden>
+    <header>
+        <span class="logo">🔒 Secure Messaging</span>
+        <span id="logged-in-as"></span>
+        <button id="logout-btn" class="secondary">Logout</button>
+    </header>
+
+    <main>
+        <section id="compose-section">
+            <h2>New message</h2>
+            <input type="text" id="send-to"
+                   placeholder="Recipient username" autocomplete="off">
+            <textarea id="message-body" rows="4"
+                      placeholder="Your message (encrypted before sending)…"></textarea>
+            <button id="send-btn">Send (E2EE)</button>
+            <p id="send-status"></p>
+        </section>
+
+        <section id="inbox-section">
+            <h2>Inbox <button id="refresh-btn" class="secondary small">Refresh</button></h2>
+            <p id="inbox-status"></p>
+            <ul id="message-list"></ul>
+        </section>
+    </main>
+</div>
+
+<!--
+    argon2-browser — used only for decrypting the private key envelope returned
+    by the server at login. The Argon2id parameters (time=3, mem=64 MiB,
+    parallelism=4) are kept identical to server/app/crypto.py so the two
+    implementations are byte-for-byte compatible.
+-->
+<script src="https://cdn.jsdelivr.net/npm/argon2-browser@1.18.0/dist/argon2-bundled.min.js"></script>
+<!--
+    js-sha3 — provides keccak256 for computing the content hash that is
+    recorded on the Ethereum Sepolia blockchain for tamper-evident verification.
+-->
+<script src="https://cdn.jsdelivr.net/npm/js-sha3@0.9.3/src/sha3.min.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

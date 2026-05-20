@@ -3,6 +3,7 @@ from app.models import Message, User
 from app.jwt_utils import token_required
 from app.validators import parse_body, SendMessageRequest, ForwardMessageRequest
 from app.extensions import limiter
+from app import blockchain
 
 messages = Blueprint('messages', __name__)
 
@@ -37,10 +38,17 @@ def send_message():
     if not msg:
         return jsonify({'message': 'Failed to send message'}), 500
 
+    tx_hash = None
+    if body.content_hash:
+        tx_hash = blockchain.record_digest(body.content_hash)
+        if tx_hash:
+            Message.set_tx_hash(msg.message_id, tx_hash)
+
     return jsonify({
-        'message_id': msg.message_id,
-        'sender_id': msg.sender_id,
+        'message_id':   msg.message_id,
+        'sender_id':    msg.sender_id,
         'recipient_id': msg.recipient_id,
+        'tx_hash':      tx_hash,
     }), 201
 
 

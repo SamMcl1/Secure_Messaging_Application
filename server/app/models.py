@@ -76,13 +76,15 @@ class User:
 
 class Message:
 
-    def __init__(self, message_id, sender_id, recipient_id, ciphertext, eph_pub, created_at=None):
+    def __init__(self, message_id, sender_id, recipient_id, ciphertext, eph_pub,
+                 created_at=None, tx_hash=None):
         self.message_id = message_id
         self.sender_id = sender_id
         self.recipient_id = recipient_id
         self.ciphertext = ciphertext
         self.eph_pub = eph_pub
         self.created_at = created_at
+        self.tx_hash = tx_hash
 
     @staticmethod
     def create(sender_id, recipient_id, ciphertext, eph_pub):
@@ -101,11 +103,24 @@ class Message:
             return None
 
     @staticmethod
+    def set_tx_hash(message_id, tx_hash):
+        """Store the Sepolia transaction hash after blockchain recording."""
+        try:
+            execute(
+                'UPDATE messages SET tx_hash = %s WHERE id = %s',
+                (tx_hash, message_id)
+            )
+            return True
+        except Exception:
+            current_app.logger.exception('Message.set_tx_hash failed message_id=%r', message_id)
+            return False
+
+    @staticmethod
     def get_for_user(user_id):
         """Return all messages the user can access: sender, recipient, or explicitly granted."""
         return query(
             '''SELECT m.id, m.sender_id, m.recipient_id, m.ciphertext, m.eph_pub,
-                      m.created_at,
+                      m.created_at, m.tx_hash,
                       s.username AS sender_username, s.public_key AS sender_public_key,
                       r.username AS recipient_username
                FROM messages m
@@ -125,7 +140,7 @@ class Message:
         """Fetch a single message with sender info. Returns dict or None."""
         rows = query(
             '''SELECT m.id, m.sender_id, m.recipient_id, m.ciphertext, m.eph_pub,
-                      m.created_at,
+                      m.created_at, m.tx_hash,
                       s.username AS sender_username, s.public_key AS sender_public_key,
                       r.username AS recipient_username
                FROM messages m
