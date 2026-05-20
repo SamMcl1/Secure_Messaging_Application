@@ -19,15 +19,28 @@ find_package(CURL REQUIRED)
 # ---------- nlohmann/json (single-header, downloaded at configure time) ----------
 # Downloads json.hpp into _deps/nlohmann/nlohmann/ so the canonical
 # #include <nlohmann/json.hpp> works without any additional setup.
-set(_NLOHMANN_ROOT "${CMAKE_BINARY_DIR}/_deps/nlohmann")
+#
+# The SHA-256 is re-checked on every configure run. If the cached file is
+# missing or its hash no longer matches (tampered or corrupted), it is
+# removed and re-downloaded so the integrity guarantee always holds.
+set(_NLOHMANN_ROOT   "${CMAKE_BINARY_DIR}/_deps/nlohmann")
 set(_NLOHMANN_HEADER "${_NLOHMANN_ROOT}/nlohmann/json.hpp")
+set(_NLOHMANN_HASH   "9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6")
+
+if(EXISTS "${_NLOHMANN_HEADER}")
+    file(SHA256 "${_NLOHMANN_HEADER}" _NLOHMANN_ACTUAL_HASH)
+    if(NOT _NLOHMANN_ACTUAL_HASH STREQUAL _NLOHMANN_HASH)
+        message(WARNING "nlohmann/json hash mismatch — re-downloading")
+        file(REMOVE "${_NLOHMANN_HEADER}")
+    endif()
+endif()
 
 if(NOT EXISTS "${_NLOHMANN_HEADER}")
     file(MAKE_DIRECTORY "${_NLOHMANN_ROOT}/nlohmann")
     file(DOWNLOAD
         "https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp"
         "${_NLOHMANN_HEADER}"
-        EXPECTED_HASH SHA256=9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6
+        EXPECTED_HASH SHA256=${_NLOHMANN_HASH}
         SHOW_PROGRESS
     )
 endif()

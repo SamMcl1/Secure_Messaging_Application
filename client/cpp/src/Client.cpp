@@ -1,6 +1,7 @@
 #include "Client.hpp"
 #include <curl/curl.h>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 
 using json = nlohmann::json;
@@ -46,7 +47,17 @@ static std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> makeCurl() {
 
 Client::Client(std::string baseUrl)
     : m_baseUrl(std::move(baseUrl))
-{}
+{
+    // curl_global_init must be called once per process before any easy handle
+    // is created. The static flag ensures this happens exactly once even if
+    // multiple Client instances are constructed. std::atexit registers the
+    // matching cleanup so resources are released at process exit.
+    static std::once_flag initFlag;
+    std::call_once(initFlag, []() {
+        curl_global_init(CURL_GLOBAL_DEFAULT);
+        std::atexit(curl_global_cleanup);
+    });
+}
 
 Client::Response Client::httpPost(const std::string& path, const std::string& jsonBody) {
     auto curl = makeCurl();
@@ -78,20 +89,28 @@ Client::Response Client::httpGet(const std::string& path) {
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &resp.body);
     curl_easy_setopt(curl.get(), CURLOPT_HTTPGET,   1L);
 
+    // Attach the auth header only when a token is present, but always
+    // perform the request so callers receive the real HTTP status (e.g. 401).
+    SlistPtr headers;
     if (!m_accessToken.empty()) {
-        curl_slist* raw = curl_slist_append(nullptr,
-            ("Authorization: Bearer " + m_accessToken).c_str());
-        SlistPtr headers(raw);
+        headers.reset(curl_slist_append(nullptr,
+            ("Authorization: Bearer " + m_accessToken).c_str()));
         curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, headers.get());
-
-        if (curl_easy_perform(curl.get()) == CURLE_OK)
-            curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &resp.status);
     }
+
+    if (curl_easy_perform(curl.get()) == CURLE_OK)
+        curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &resp.status);
 
     return resp;
 }
 
 bool Client::login(const std::string& username, const std::string& password) {
+    // Clear any stale credentials first so isLoggedIn() never reflects a
+    // previous successful login after a failed re-login attempt.
+    m_accessToken.clear();
+    m_refreshToken.clear();
+    m_userId = 0;
+
     const std::string body = json{{"username", username}, {"password", password}}.dump();
     auto resp = httpPost("/auth/login", body);
     if (resp.status != 200) return false;
@@ -103,6 +122,9 @@ bool Client::login(const std::string& username, const std::string& password) {
         m_userId        = j.at("user_id").get<int>();
         return true;
     } catch (...) {
+        m_accessToken.clear();
+        m_refreshToken.clear();
+        m_userId = 0;
         return false;
     }
 }
