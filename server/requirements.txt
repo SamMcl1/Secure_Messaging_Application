@@ -11,7 +11,7 @@ pydantic>=2.0,<3.0
 flask-limiter
 flask-cors
 flask-talisman
-requests             # outbound HTTPS client — used by http_client.py
+requests
 pytest>=7.0
 pytest-cov
 httpx>=0.24

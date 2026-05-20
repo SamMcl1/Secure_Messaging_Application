@@ -32,9 +32,8 @@ from pathlib import Path
 import pytest
 import requests
 
-# httpx is an optional dependency (install via requirements-dev.txt).
-# Tests that need it are skipped if it is absent.
-httpx = pytest.importorskip("httpx", reason="httpx not installed — run: pip install httpx")
+# httpx is listed in requirements.txt — skipped only if the venv is stale.
+httpx = pytest.importorskip("httpx", reason="httpx not installed — run: pip install -r requirements.txt")
 
 # http_client.py lives at server/http_client.py — add server/ to the path so
 # we can import it without triggering the Flask app package's __init__.py.

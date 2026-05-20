@@ -86,7 +86,7 @@ Run with:
 
 ```bash
 cd server
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 pytest tests/test_ssl_verification.py -v
 ```
 
