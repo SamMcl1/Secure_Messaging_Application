@@ -61,6 +61,13 @@ def record_digest(content_hash_hex: str):
         })
         signed  = _account.sign_transaction(tx)
         tx_hash = _w3.eth.send_raw_transaction(signed.raw_transaction)
+
+        # Wait for the transaction to be mined and confirm it didn't revert.
+        receipt = _w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+        if receipt.status != 1:
+            log.error('blockchain: tx reverted hash=%s', '0x' + tx_hash.hex())
+            return None
+
         return '0x' + tx_hash.hex()
     except Exception as e:
         log.error('blockchain: record_digest failed: %s', e)

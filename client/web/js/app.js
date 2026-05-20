@@ -120,15 +120,18 @@ async function decryptPrivateKey(envelopeB64, password) {
     });
 
     const key = await hkdfDerive(result.hash, 32, enc.encode('SecureMsg-v1-key-protection'));
-
     const aesKey = await crypto.subtle.importKey('raw', key, { name: 'AES-GCM' }, false, ['decrypt']);
-    const skBuf  = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: nonce, additionalData: enc.encode('private-key') },
-        aesKey,
-        ct,
-    );
 
-    return new Uint8Array(skBuf);
+    try {
+        const skBuf = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: nonce, additionalData: enc.encode('private-key') },
+            aesKey,
+            ct,
+        );
+        return new Uint8Array(skBuf);
+    } catch {
+        throw new Error('Incorrect password');
+    }
 }
 
 // Hash the plaintext with keccak256 so the server can record it on-chain.
@@ -137,7 +140,8 @@ function keccak256Hex(bytes) {
     return '0x' + window.sha3.keccak_256(bytes);
 }
 
-// Session — kept in memory only, cleared on logout
+// Session state — held in memory, mirrored to sessionStorage so a page reload
+// doesn't log the user out. Cleared entirely on logout.
 const session = {
     userId:         null,
     username:       null,
@@ -160,22 +164,91 @@ async function storeSession(data, password) {
     session.privateKey     = await crypto.subtle.importKey(
         'raw', skBytes, { name: 'X25519' }, false, ['deriveBits'],
     );
+
+    sessionStorage.setItem('sm_session', JSON.stringify({
+        userId:        data.user_id,
+        username:      data.username,
+        accessToken:   data.access_token,
+        refreshToken:  data.refresh_token,
+        publicKeyB64:  data.public_key,
+        privateKeyB64: bytesToB64(skBytes),
+    }));
+}
+
+function updateSessionStorage() {
+    const raw = sessionStorage.getItem('sm_session');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    d.accessToken  = session.accessToken;
+    d.refreshToken = session.refreshToken;
+    sessionStorage.setItem('sm_session', JSON.stringify(d));
 }
 
 function clearSession() {
     for (const k of Object.keys(session)) session[k] = null;
+    sessionStorage.removeItem('sm_session');
+}
+
+// Restore a previous session from sessionStorage (survives page reload).
+async function restoreSession() {
+    const raw = sessionStorage.getItem('sm_session');
+    if (!raw) return false;
+    try {
+        const d = JSON.parse(raw);
+        session.userId         = d.userId;
+        session.username       = d.username;
+        session.accessToken    = d.accessToken;
+        session.refreshToken   = d.refreshToken;
+        session.publicKeyBytes = b64ToBytes(d.publicKeyB64);
+        session.privateKey     = await crypto.subtle.importKey(
+            'raw', b64ToBytes(d.privateKeyB64), { name: 'X25519' }, false, ['deriveBits'],
+        );
+        return true;
+    } catch {
+        sessionStorage.removeItem('sm_session');
+        return false;
+    }
 }
 
 // API base — leave empty when the client is served from the same host as the server.
 // Set to the server URL (e.g. 'http://localhost:5000') if running separately.
 const API_BASE = '';
 
-async function apiFetch(path, options = {}) {
+// Try to get a new access token using the refresh token.
+// Returns true on success and updates the session + sessionStorage.
+async function tryRefreshToken() {
+    try {
+        const res = await fetch(API_BASE + '/auth/refresh', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ refresh_token: session.refreshToken }),
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        session.accessToken  = data.access_token;
+        session.refreshToken = data.refresh_token;
+        updateSessionStorage();
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function apiFetch(path, options = {}, _retry = false) {
     const headers = { 'Content-Type': 'application/json', ...(options.headers ?? {}) };
     if (session.accessToken) headers['Authorization'] = `Bearer ${session.accessToken}`;
 
     const res  = await fetch(API_BASE + path, { ...options, headers });
     const body = await res.json().catch(() => ({}));
+
+    // On 401, attempt a token refresh and retry the request once.
+    if (res.status === 401 && !_retry && session.refreshToken) {
+        const refreshed = await tryRefreshToken();
+        if (refreshed) return apiFetch(path, options, true);
+        clearSession();
+        switchToAuth();
+        throw new Error('Session expired. Please log in again.');
+    }
 
     if (!res.ok) {
         throw Object.assign(new Error(body.message ?? `HTTP ${res.status}`), { status: res.status });
@@ -248,12 +321,13 @@ async function getMessages() {
     const results  = [];
 
     for (const msg of messages) {
+        const isSent = msg.sender_id === session.userId;
         let plaintext;
 
-        if (msg.sender_id === session.userId) {
+        if (isSent) {
             // The ephemeral key used to encrypt this message was never stored,
             // so we can't decrypt it. This is expected — it's how E2EE works.
-            plaintext = '[Sent message — E2EE: plaintext not stored server-side]';
+            plaintext = null;
         } else {
             try {
                 const senderPkBytes = b64ToBytes(msg.sender_public_key);
@@ -265,11 +339,11 @@ async function getMessages() {
                     msg.ciphertext,
                 );
             } catch {
-                plaintext = '[Decryption failed]';
+                plaintext = null;
             }
         }
 
-        results.push({ ...msg, plaintext });
+        results.push({ ...msg, plaintext, isSent });
     }
 
     return results;
@@ -300,19 +374,27 @@ function renderMessages(messages) {
     for (const msg of messages) {
         const li   = document.createElement('li');
         const time = msg.created_at ? new Date(msg.created_at).toLocaleString() : '';
-        const direction = msg.sender_id === session.userId
-            ? `→ <strong>${escapeHtml(msg.recipient_username)}</strong>`
-            : `← <strong>${escapeHtml(msg.sender_username)}</strong>`;
 
-        li.innerHTML = `
-            <div class="msg-meta">${direction} <time>${escapeHtml(time)}</time></div>
-            <p class="msg-body">${escapeHtml(msg.plaintext)}</p>
-            ${msg.tx_hash
-                ? `<div class="msg-chain">
-                       ⛓ On-chain:
-                       <code title="${escapeHtml(msg.tx_hash)}">${escapeHtml(msg.tx_hash.slice(0, 22))}…</code>
-                   </div>`
-                : ''}`;
+        if (msg.isSent) {
+            li.className = 'msg-sent';
+            li.innerHTML = `
+                <div class="msg-meta">
+                    <span>To: <strong>${escapeHtml(msg.recipient_username)}</strong></span>
+                    <time>${escapeHtml(time)}</time>
+                </div>
+                <p class="msg-body msg-body-sent">Encrypted — content not stored server-side</p>
+                ${msg.tx_hash ? `<div class="msg-chain">On-chain: <code title="${escapeHtml(msg.tx_hash)}">${escapeHtml(msg.tx_hash.slice(0, 22))}…</code></div>` : ''}`;
+        } else {
+            li.className = 'msg-received';
+            li.innerHTML = `
+                <div class="msg-meta">
+                    <span>From: <strong>${escapeHtml(msg.sender_username)}</strong></span>
+                    <time>${escapeHtml(time)}</time>
+                </div>
+                <p class="msg-body">${msg.plaintext !== null ? escapeHtml(msg.plaintext) : '<em>Decryption failed</em>'}</p>
+                ${msg.tx_hash ? `<div class="msg-chain">On-chain: <code title="${escapeHtml(msg.tx_hash)}">${escapeHtml(msg.tx_hash.slice(0, 22))}…</code></div>` : ''}`;
+        }
+
         list.appendChild(li);
     }
 }
@@ -330,7 +412,12 @@ function switchToAuth() {
     document.getElementById('register-view').hidden = true;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+
+    // Restore session from a previous page load before showing any UI
+    if (await restoreSession()) {
+        switchToApp();
+    }
 
     document.getElementById('show-register').addEventListener('click', e => {
         e.preventDefault();
@@ -345,21 +432,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('register-btn').addEventListener('click', async () => {
+        const btn      = document.getElementById('register-btn');
         const username = document.getElementById('reg-username').value.trim();
         const password = document.getElementById('reg-password').value;
+        btn.disabled = true;
         try {
             await register(username, password);
             switchToApp();
-        } catch (e) { showAuthError(e.message); }
+        } catch (e) {
+            showAuthError(e.message);
+        } finally {
+            btn.disabled = false;
+        }
     });
 
     document.getElementById('login-btn').addEventListener('click', async () => {
+        const btn      = document.getElementById('login-btn');
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value;
+        btn.disabled = true;
         try {
             await login(username, password);
             switchToApp();
-        } catch (e) { showAuthError(e.message); }
+        } catch (e) {
+            showAuthError(e.message);
+        } finally {
+            btn.disabled = false;
+        }
     });
 
     document.getElementById('logout-btn').addEventListener('click', async () => {
@@ -368,27 +467,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('send-btn').addEventListener('click', async () => {
+        const btn    = document.getElementById('send-btn');
         const to     = document.getElementById('send-to').value.trim();
         const body   = document.getElementById('message-body').value.trim();
         const status = document.getElementById('send-status');
 
         if (!to || !body) { status.textContent = 'Enter a recipient and a message.'; return; }
 
+        btn.disabled = true;
         status.textContent = 'Encrypting and sending…';
         try {
             const result = await sendMessage(to, body);
             document.getElementById('message-body').value = '';
             status.textContent = result.tx_hash
-                ? `Sent! Blockchain tx: ${result.tx_hash.slice(0, 22)}…`
-                : 'Sent!';
+                ? `Sent. Recorded on-chain: ${result.tx_hash.slice(0, 18)}…`
+                : 'Sent.';
             setTimeout(() => { status.textContent = ''; }, 5000);
         } catch (e) {
             status.textContent = `Failed: ${e.message}`;
+        } finally {
+            btn.disabled = false;
         }
     });
 
     document.getElementById('refresh-btn').addEventListener('click', async () => {
+        const btn    = document.getElementById('refresh-btn');
         const status = document.getElementById('inbox-status');
+        btn.disabled = true;
         status.textContent = 'Loading…';
         try {
             const messages = await getMessages();
@@ -396,6 +501,8 @@ document.addEventListener('DOMContentLoaded', () => {
             status.textContent = '';
         } catch (e) {
             status.textContent = `Error: ${e.message}`;
+        } finally {
+            btn.disabled = false;
         }
     });
 

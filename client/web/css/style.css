@@ -306,15 +306,35 @@ button.small {
 #message-list::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 4px; }
 
 #message-list li {
-    background: var(--surface);
-    border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 0.85rem 1rem;
     transition: border-color 0.15s;
 }
 
-#message-list li:hover {
+#message-list li.msg-received {
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+
+#message-list li.msg-received:hover {
     border-color: var(--border-focus);
+}
+
+#message-list li.msg-sent {
+    background: transparent;
+    border: 1px solid var(--border);
+    opacity: 0.6;
+}
+
+#message-list li.msg-sent:hover {
+    opacity: 0.85;
+    border-color: var(--border-focus);
+}
+
+.msg-body-sent {
+    font-size: 0.78rem;
+    font-style: italic;
+    color: var(--text-2);
 }
 
 .msg-meta {
