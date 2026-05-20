@@ -92,19 +92,31 @@ class HttpClient:
 
     def get(self, path: str, **kwargs) -> requests.Response:
         """Issue a GET request to ``base_url + path``."""
+        self._reject_tls_overrides(kwargs)
         return self._session.get(self._url(path), timeout=self._timeout, **kwargs)
 
     def post(self, path: str, json=None, **kwargs) -> requests.Response:
         """Issue a POST request with an optional JSON body."""
+        self._reject_tls_overrides(kwargs)
         return self._session.post(
             self._url(path), json=json, timeout=self._timeout, **kwargs
         )
 
     def delete(self, path: str, **kwargs) -> requests.Response:
         """Issue a DELETE request."""
+        self._reject_tls_overrides(kwargs)
         return self._session.delete(self._url(path), timeout=self._timeout, **kwargs)
 
     # ── private helpers ───────────────────────────────────────────────────────
+
+    def _reject_tls_overrides(self, kwargs: dict) -> None:
+        forbidden = {"verify", "cert"} & set(kwargs)
+        if forbidden:
+            names = ", ".join(sorted(forbidden))
+            raise ValueError(
+                f"Per-request TLS overrides are not allowed: {names}. "
+                "Configure certificate verification via HttpClient(...) only."
+            )
 
     def _url(self, path: str) -> str:
         return f"{self._base}/{path.lstrip('/')}"
