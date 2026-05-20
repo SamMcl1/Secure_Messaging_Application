@@ -33,7 +33,7 @@ server {
     # --- PT-04: hide upstream Server header ---
     server_tokens off;                          # removes Nginx version from its own header
     proxy_hide_header Server;                   # strip Werkzeug/Gunicorn header from upstream
-    add_header Server "hangover" always;        # replace with a neutral value
+                                                # Nginx will still send its own Server header
 
     # --- proxy to Gunicorn ---
     location / {
