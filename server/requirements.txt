@@ -1,4 +1,5 @@
 Flask
+gunicorn
 cryptography
 argon2-cffi
 web3

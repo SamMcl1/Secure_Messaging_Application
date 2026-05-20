@@ -67,7 +67,12 @@ def create_app(config_class=Config):
         strict_transport_security=True,
         strict_transport_security_max_age=31536000,
         strict_transport_security_include_subdomains=True,
-        content_security_policy=False,
+        content_security_policy={
+            # API-only server — block everything by default.
+            # Adjust if HTML responses are ever added.
+            'default-src': "'none'",
+            'frame-ancestors': "'none'",
+        },
         x_content_type_options=True,
         frame_options='DENY',
     )

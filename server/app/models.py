@@ -1,3 +1,5 @@
+from flask import current_app
+
 from app.db import query, execute, get_conn
 from app.password_utils import hash_password, verify_password
 
@@ -21,6 +23,7 @@ class User:
             )
             return User(username, public_key=public_key, user_id=user_id)
         except Exception:
+            current_app.logger.exception('User.create failed for username=%r', username)
             return None
 
     @staticmethod
@@ -75,6 +78,9 @@ class Message:
             )
             return Message(message_id, sender_id, recipient_id, ciphertext, nonce)
         except Exception:
+            current_app.logger.exception(
+                'Message.create failed sender_id=%r recipient_id=%r', sender_id, recipient_id
+            )
             return None
 
     @staticmethod
@@ -119,6 +125,9 @@ class Message:
             )
             return True
         except Exception:
+            current_app.logger.exception(
+                'Message.grant_access failed message_id=%r user_id=%r', message_id, user_id
+            )
             return False
 
     @staticmethod
@@ -134,6 +143,9 @@ class Message:
             )
             return bool(rows)
         except Exception:
+            current_app.logger.exception(
+                'Message.revoke_access failed message_id=%r user_id=%r', message_id, user_id
+            )
             return False
 
 
@@ -151,6 +163,7 @@ class RevokedToken:
             )
             return True
         except Exception:
+            current_app.logger.exception('RevokedToken.add failed jti=%r user_id=%r', jti, user_id)
             return False
 
     @staticmethod
@@ -169,4 +182,5 @@ class RevokedToken:
                 )
             return True
         except Exception:
+            current_app.logger.exception('RevokedToken.add_many failed count=%d', len(revocations))
             return False
