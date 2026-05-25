@@ -1,7 +1,9 @@
 #include "Client.hpp"
 #include <curl/curl.h>
+#include <iomanip>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <stdexcept>
 
 using json = nlohmann::json;
@@ -131,13 +133,15 @@ bool Client::login(const std::string& username, const std::string& password) {
 
 bool Client::sendMessage(int recipientId,
                          const std::string& ciphertext,
-                         const std::string& nonce) {
+                         const std::string& ephPub) {
     const std::string body = json{
         {"recipient_id", recipientId},
         {"ciphertext",   ciphertext},
-        {"nonce",        nonce}
+        {"eph_pub",      ephPub}
     }.dump();
-    return httpPost("/messages/", body).status == 201;
+    auto resp = httpPost("/messages/", body);
+    if (resp.status != 201) return false;
+    return true;
 }
 
 std::vector<nlohmann::json> Client::getMessages() {
@@ -148,6 +152,50 @@ std::vector<nlohmann::json> Client::getMessages() {
         return json::parse(resp.body).get<std::vector<json>>();
     } catch (...) {
         return {};
+    }
+}
+
+int Client::fetchInbox(MessageStore& store) {
+    auto resp = httpGet("/messages/");
+    if (resp.status != 200) return -1;
+
+    try {
+        auto arr = json::parse(resp.body);
+        int count = 0;
+        for (const auto& j : arr) {
+            // BIGSERIAL in Postgres can exceed 32-bit int; use long long.
+            std::string id        = std::to_string(j.at("id").get<long long>());
+            std::string sender    = j.at("sender_username").get<std::string>();
+            std::string recipient = j.at("recipient_username").get<std::string>();
+            std::string ciphertext = j.at("ciphertext").get<std::string>();
+            std::string ephPub    = j.at("eph_pub").get<std::string>();
+
+            // Flask jsonify serialises datetimes as RFC 1123 on older versions
+            // ("Sun, 25 May 2026 11:42:12 GMT") and ISO 8601 on newer ones
+            // ("2026-05-25T11:42:12"). Try ISO 8601 first, fall back to RFC 1123.
+            std::time_t ts = 0;
+            auto it = j.find("created_at");
+            if (it != j.end() && it->is_string()) {
+                const std::string& tsStr = it->get<std::string>();
+                std::tm tm{};
+                std::istringstream ss(tsStr);
+                ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
+                if (ss.fail()) {
+                    ss.clear();
+                    ss.str(tsStr);
+                    ss >> std::get_time(&tm, "%a, %d %b %Y %H:%M:%S");
+                }
+                if (!ss.fail()) ts = std::mktime(&tm);
+            }
+
+            store.add(std::make_unique<Message>(
+                std::move(id), std::move(sender), std::move(recipient),
+                std::move(ciphertext), std::move(ephPub), ts));
+            ++count;
+        }
+        return count;
+    } catch (...) {
+        return -2;
     }
 }
 
