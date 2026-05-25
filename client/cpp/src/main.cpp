@@ -10,8 +10,8 @@ static void printMessage(const Message* m) {
     std::time_t ts = m->getTimestamp();
     char timeBuf[32] = "unknown";
     if (ts != 0) {
-        auto* tm = std::localtime(&ts);
-        std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", tm);
+        if (auto* tm = std::localtime(&ts))
+            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", tm);
     }
 
     const auto& ct = m->getCiphertext();
