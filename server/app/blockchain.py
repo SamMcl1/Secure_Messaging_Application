@@ -13,15 +13,17 @@ Required env vars:
 import json
 import logging
 import os
+import threading
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 _ABI_PATH = Path(__file__).parents[2] / 'blockchain' / 'abi' / 'MessageDigest.json'
 
-_w3       = None
-_account  = None
-_contract = None
+_w3          = None
+_account     = None
+_contract    = None
+_nonce_lock  = threading.Lock()  # serialise sends so nonces never collide
 
 try:
     from web3 import Web3
@@ -46,28 +48,33 @@ except Exception as e:
 
 
 def record_digest(content_hash_hex: str):
-    """Send a keccak256 hash to the MessageDigest contract. Returns tx hash or None."""
+    """
+    Broadcast a keccak256 hash to the MessageDigest contract.
+
+    Returns the tx hash immediately after the transaction is accepted by the
+    node — we don't wait for mining so this stays fast. Returns None if
+    blockchain is not configured or if the RPC call fails.
+    """
     if _contract is None:
         return None
 
     try:
-        raw   = bytes.fromhex(content_hash_hex.removeprefix('0x').zfill(64))
-        nonce = _w3.eth.get_transaction_count(_account.address)
-        tx    = _contract.functions.recordDigest(raw).build_transaction({
-            'from':     _account.address,
-            'nonce':    nonce,
-            'gas':      80_000,
-            'gasPrice': _w3.eth.gas_price,
-        })
-        signed  = _account.sign_transaction(tx)
-        tx_hash = _w3.eth.send_raw_transaction(signed.raw_transaction)
+        raw = bytes.fromhex(content_hash_hex.removeprefix('0x').zfill(64))
 
-        # Wait for the transaction to be mined and confirm it didn't revert.
-        receipt = _w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
-        if receipt.status != 1:
-            log.error('blockchain: tx reverted hash=%s', '0x' + tx_hash.hex())
-            return None
+        # Lock around nonce fetch + send so concurrent requests don't collide.
+        # Using 'pending' includes any already-queued transactions from this account.
+        with _nonce_lock:
+            nonce = _w3.eth.get_transaction_count(_account.address, 'pending')
+            tx = _contract.functions.recordDigest(raw).build_transaction({
+                'from':     _account.address,
+                'nonce':    nonce,
+                'gas':      80_000,
+                'gasPrice': _w3.eth.gas_price,
+            })
+            signed  = _account.sign_transaction(tx)
+            tx_hash = _w3.eth.send_raw_transaction(signed.raw_transaction)
 
+        # Return immediately — the caller stores the hash and the chain confirms later.
         return '0x' + tx_hash.hex()
     except Exception as e:
         log.error('blockchain: record_digest failed: %s', e)

@@ -1,4 +1,7 @@
-from flask import Blueprint, jsonify, g
+import threading
+import time
+
+from flask import Blueprint, jsonify, g, current_app
 from app.models import Message, User
 from app.jwt_utils import token_required
 from app.validators import parse_body, SendMessageRequest, ForwardMessageRequest
@@ -6,6 +9,30 @@ from app.extensions import limiter
 from app import blockchain
 
 messages = Blueprint('messages', __name__)
+
+# Per-user blockchain rate limit — max 10 on-chain records per hour per user.
+# This prevents any single account from draining the deployer wallet's gas.
+_bc_rate: dict[int, list] = {}
+_bc_rate_lock = threading.Lock()
+
+
+def _blockchain_rate_ok(user_id: int, max_per_hour: int = 10) -> bool:
+    now = time.monotonic()
+    with _bc_rate_lock:
+        recent = [t for t in _bc_rate.get(user_id, []) if now - t < 3600]
+        if len(recent) >= max_per_hour:
+            return False
+        recent.append(now)
+        _bc_rate[user_id] = recent
+    return True
+
+
+def _record_and_store(app, message_id: int, content_hash: str):
+    """Run blockchain.record_digest in a background thread so the HTTP response returns fast."""
+    with app.app_context():
+        tx = blockchain.record_digest(content_hash)
+        if tx:
+            Message.set_tx_hash(message_id, tx)
 
 
 def _can_access(msg, user_id):
@@ -38,17 +65,21 @@ def send_message():
     if not msg:
         return jsonify({'message': 'Failed to send message'}), 500
 
-    tx_hash = None
-    if body.content_hash:
-        tx_hash = blockchain.record_digest(body.content_hash)
-        if tx_hash:
-            Message.set_tx_hash(msg.message_id, tx_hash)
+    if body.content_hash and _blockchain_rate_ok(g.user_id):
+        # Fire-and-forget — the transaction is submitted in the background so
+        # the API response isn't held up waiting for the chain to confirm.
+        # The tx_hash is stored in the DB once the RPC call comes back.
+        app = current_app._get_current_object()
+        threading.Thread(
+            target=_record_and_store,
+            args=(app, msg.message_id, body.content_hash),
+            daemon=True,
+        ).start()
 
     return jsonify({
         'message_id':   msg.message_id,
         'sender_id':    msg.sender_id,
         'recipient_id': msg.recipient_id,
-        'tx_hash':      tx_hash,
     }), 201
 
 
