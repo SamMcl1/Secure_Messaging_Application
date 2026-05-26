@@ -169,7 +169,7 @@ class SendMessageRequest(BaseModel):
         if v is None:
             return None
         if not _HEX32.fullmatch(v):
-            raise ValueError('content_hash must be a 0x-prefixed 32-byte hex string')
+            raise ValueError('content_hash must be a 32-byte hex string (0x prefix is optional)')
         return v.lower() if v.startswith('0x') else '0x' + v.lower()
 
 
