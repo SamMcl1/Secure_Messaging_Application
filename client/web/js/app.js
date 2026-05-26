@@ -149,6 +149,7 @@ const session = {
     refreshToken:   null,
     publicKeyBytes: null,
     privateKey:     null,
+    encPrivateKey:  null,  // encrypted envelope only — raw bytes are never written to storage
 };
 
 function isLoggedIn() { return !!session.accessToken; }
@@ -161,17 +162,21 @@ async function storeSession(data, password) {
     session.accessToken    = data.access_token;
     session.refreshToken   = data.refresh_token;
     session.publicKeyBytes = b64ToBytes(data.public_key);
+    session.encPrivateKey  = data.encrypted_private_key;
     session.privateKey     = await crypto.subtle.importKey(
         'raw', skBytes, { name: 'X25519' }, false, ['deriveBits'],
     );
 
+    // Store the encrypted envelope, not the raw decrypted key bytes.
+    // Even if XSS reads sessionStorage it only sees the ciphertext,
+    // which is useless without the user's password.
     sessionStorage.setItem('sm_session', JSON.stringify({
         userId:        data.user_id,
         username:      data.username,
         accessToken:   data.access_token,
         refreshToken:  data.refresh_token,
         publicKeyB64:  data.public_key,
-        privateKeyB64: bytesToB64(skBytes),
+        encPrivateKey: data.encrypted_private_key,
     }));
 }
 
@@ -190,19 +195,24 @@ function clearSession() {
 }
 
 // Restore a previous session from sessionStorage (survives page reload).
+// The private key is NOT restored — it's never stored as raw bytes.
+// The caller is responsible for re-prompting the user for their password.
 async function restoreSession() {
     const raw = sessionStorage.getItem('sm_session');
     if (!raw) return false;
     try {
         const d = JSON.parse(raw);
+        if (!d.encPrivateKey || !d.accessToken) {
+            sessionStorage.removeItem('sm_session');
+            return false;
+        }
         session.userId         = d.userId;
         session.username       = d.username;
         session.accessToken    = d.accessToken;
         session.refreshToken   = d.refreshToken;
         session.publicKeyBytes = b64ToBytes(d.publicKeyB64);
-        session.privateKey     = await crypto.subtle.importKey(
-            'raw', b64ToBytes(d.privateKeyB64), { name: 'X25519' }, false, ['deriveBits'],
-        );
+        session.encPrivateKey  = d.encPrivateKey;
+        // session.privateKey stays null — requires the user's password to decrypt
         return true;
     } catch {
         sessionStorage.removeItem('sm_session');
@@ -414,9 +424,11 @@ function switchToAuth() {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
-    // Restore session from a previous page load before showing any UI
+    // Restore session tokens from a previous page load.
+    // The private key is never persisted, so the user must re-enter their
+    // password to decrypt it before we can show the app.
     if (await restoreSession()) {
-        switchToApp();
+        document.getElementById('login-username').value = session.username;
     }
 
     document.getElementById('show-register').addEventListener('click', e => {

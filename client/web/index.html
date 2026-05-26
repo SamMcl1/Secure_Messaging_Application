@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'">
+          content="default-src 'self'; connect-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'">
     <title>Secure Messaging</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -61,8 +61,12 @@
     </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/argon2-browser@1.18.0/dist/argon2-bundled.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/js-sha3@0.9.3/src/sha3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/argon2-browser@1.18.0/dist/argon2-bundled.min.js"
+        integrity="sha384-XOR3aNvHciLPIf6r+2glkrmbBbLmIJ1EChMXjw8eBKBf8gE0rDq1TyUNuRdorOqi"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/js-sha3@0.9.3/src/sha3.min.js"
+        integrity="sha384-qmlWQX2DZ9z7wD0BjuRUhx3R/TgSeRpscnpKcx0kFaM1eSc9ToGux7t8h/tyP61W"
+        crossorigin="anonymous"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
