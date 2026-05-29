@@ -1,5 +1,6 @@
 #pragma once
 #include "Message.hpp"
+#include <cstddef>
 #include <map>
 #include <memory>
 #include <string>
