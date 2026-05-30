@@ -65,15 +65,14 @@ ciphertext and metadata.
 **Against (d) — fully compromised server.** The following properties are **explicitly not
 guaranteed**, and are stated honestly:
 
-1. **Key generation at registration (most significant).** In the current implementation the
-   **server generates the user's X25519 keypair and receives the password in plaintext** at
-   registration (`auth_routes.py`). A server that is malicious *at the time a user
-   registers* can record that user's password and private key, and thereafter read and
-   forge all of that user's messages. Confidentiality/authenticity for a user therefore
-   depend on the server being honest *during that user's registration*. **Mitigation
-   (recommended next step):** move keypair generation into the browser so the private key
-   and password never leave the client; the server would receive only the public key and a
-   client-produced encrypted envelope. This is documented in §7 as the primary limitation.
+1. **Trust in delivered client code (inherent to browser E2EE).** The web client is
+   JavaScript served by the server, so a fully compromised server could serve *modified*
+   client code that exfiltrates the password or keys. This is an inherent property of all
+   browser-delivered E2EE, not specific to this design, and applies equally to any web app.
+   Native clients (the C++ client) are not exposed to this code-delivery risk. Note that the
+   keypair is generated **in the client** and the server never receives or stores a raw
+   private key, so a passively compromised server or a database breach yields no private
+   keys — the residual is limited to *active* tampering with delivered code.
 2. **TOFU first-contact MITM.** Public keys are trusted on first lookup (Trust On First
    Use, §3). A compromised server can serve an attacker-controlled public key for a
    recipient the sender has never messaged before, mounting a man-in-the-middle on that
@@ -85,9 +84,10 @@ guaranteed**, and are stated honestly:
 4. **No forward secrecy (see §3).** If a recipient's long-term private key is later
    exfiltrated, all past messages to that recipient become decryptable.
 
-For a user whose keypair was generated honestly, a server compromised *later* still cannot
-read or forge their messages, because it never stored the raw private key or the password —
-subject to the no-forward-secrecy caveat (4).
+Because the private key is generated in the client and only its password-encrypted envelope
+is ever uploaded, a server compromised *after* registration cannot read or forge a user's
+messages — it never holds the raw private key, and the Argon2id password hash is one-way —
+subject to the no-forward-secrecy caveat (4) and the delivered-code caveat (1).
 
 ---
 
@@ -214,21 +214,22 @@ unrelated keys derived from the same input material.
 
 ```mermaid
 sequenceDiagram
-    participant C as Client
+    participant C as Client (browser)
     participant S as Server
     participant DB as Database
-    C->>S: POST /auth/register {username, password}  (over TLS)
-    Note over S: generate_keypair() → (sk, pk)
+    Note over C: generateIdentityKeypair() → (sk, pk)  [in browser]
+    Note over C: encryptPrivateKey(sk, password) → envelope
+    C->>S: POST /auth/register {username, password, public_key, envelope}  (over TLS)
     Note over S: hash_password(password) → Argon2id hash
-    Note over S: encrypt_private_key(sk, password) → envelope
     S->>DB: INSERT username, Argon2id hash, pk, envelope
     S-->>C: {public_key, encrypted_private_key, JWT tokens}
-    Note over C: decrypt envelope with password → sk held in memory
+    Note over C: keep sk in memory; envelope mirrored to sessionStorage
 ```
 
-> Limitation: the server sees `password` and `sk` transiently here (§2(d), §7). The DB
-> persists only the Argon2id hash, public key, and password-sealed envelope — never raw `sk`
-> or the password.
+> The private key `sk` is generated in the browser and never leaves it in plaintext. The
+> server and DB only ever hold the public key, the Argon2id password hash (for login), and
+> the password-sealed envelope — never the raw private key. The password is sent (over TLS)
+> solely so the server can compute the login hash; it is never stored in the clear.
 
 ### 6.2 Key Publication / Lookup (TOFU)
 
@@ -289,10 +290,11 @@ sequenceDiagram
 
 ## 7. Known Limitations
 
-1. **Server-side key generation at registration (primary).** The server transiently sees
-   the password and the freshly generated private key. A server malicious *at registration*
-   can fully compromise that user. The recommended fix is client-side key generation so the
-   private key and password never reach the server. *(See §2(d).)*
+1. **Trust in delivered client code.** Browser-delivered E2EE inherently trusts the server
+   to serve honest client JavaScript; an *actively* malicious server could serve code that
+   leaks secrets. This is universal to web E2EE and does not apply to native clients. Keys
+   are generated client-side and never uploaded in the clear, so passive compromise and DB
+   breaches expose no private keys. *(See §2(d).)*
 2. **TOFU first-contact MITM.** A malicious server can substitute a public key on a peer's
    first lookup. Mitigated by key pinning after first contact; not by a CA.
 3. **No forward secrecy w.r.t. the recipient.** Both DH operations use the recipient's

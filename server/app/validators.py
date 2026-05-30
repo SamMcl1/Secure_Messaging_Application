@@ -57,6 +57,8 @@ class RegisterRequest(BaseModel):
 
     username: str
     password: str
+    public_key: str            # client-generated X25519 public key (base64, 32 B)
+    encrypted_private_key: str  # client-encrypted private-key envelope (base64 JSON)
 
     @field_validator('username')
     @classmethod
@@ -78,6 +80,24 @@ class RegisterRequest(BaseModel):
             raise ValueError('password must be at least 8 characters')
         if len(v) > 128:
             raise ValueError('password must be 128 characters or fewer')
+        return v
+
+    @field_validator('public_key')
+    @classmethod
+    def public_key_valid(cls, v: str) -> str:
+        if not v or len(v) > 256:
+            raise ValueError('public_key must be a non-empty base64 string')
+        if not _BASE64.fullmatch(v):
+            raise ValueError('public_key must be valid base64')
+        return v
+
+    @field_validator('encrypted_private_key')
+    @classmethod
+    def encrypted_private_key_valid(cls, v: str) -> str:
+        if not v or len(v) > 4096:
+            raise ValueError('encrypted_private_key must be a non-empty base64 string')
+        if not _BASE64.fullmatch(v):
+            raise ValueError('encrypted_private_key must be valid base64')
         return v
 
 
