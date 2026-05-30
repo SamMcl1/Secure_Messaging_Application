@@ -103,6 +103,26 @@ def get_message(message_id):
     return jsonify(msg), 200
 
 
+@messages.route('/<int:message_id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
+@token_required
+def delete_message(message_id):
+    msg = Message.get_by_id(message_id)
+    if not msg:
+        return jsonify({'message': 'Message not found'}), 404
+
+    # Only the sender or recipient can delete a message outright. Users who
+    # only hold a shared access grant should have their access revoked instead
+    # (DELETE /<id>/access/<user_id>) rather than destroying it for everyone.
+    if msg['sender_id'] != g.user_id and msg['recipient_id'] != g.user_id:
+        return jsonify({'message': 'Access denied'}), 403
+
+    if not Message.delete(message_id):
+        return jsonify({'message': 'Failed to delete message'}), 500
+
+    return jsonify({'message': 'Message deleted'}), 200
+
+
 @messages.route('/<int:message_id>/forward', methods=['POST'])
 @limiter.limit("30 per minute")
 @token_required
