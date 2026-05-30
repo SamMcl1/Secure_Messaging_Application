@@ -152,6 +152,21 @@ class Message:
         return rows[0] if rows else None
 
     @staticmethod
+    def delete(message_id):
+        """Permanently delete a message. The message_access rows are removed
+        automatically via ON DELETE CASCADE. Returns True only if a row was
+        actually deleted."""
+        try:
+            rows = query(
+                'DELETE FROM messages WHERE id = %s RETURNING id',
+                (message_id,)
+            )
+            return bool(rows)
+        except Exception:
+            current_app.logger.exception('Message.delete failed message_id=%r', message_id)
+            return False
+
+    @staticmethod
     def has_access(message_id, user_id):
         """Return True if user has a non-revoked explicit access grant."""
         rows = query(

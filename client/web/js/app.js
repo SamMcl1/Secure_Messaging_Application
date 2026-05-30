@@ -424,6 +424,33 @@ async function getMessages() {
     return results;
 }
 
+async function deleteMessage(messageId) {
+    return apiFetch(`/messages/${messageId}`, { method: 'DELETE' });
+}
+
+// Save a message to a local .txt file. Works for any message we can read
+// (received or shared) — sent messages can't be decrypted client-side so
+// there's nothing to download for those.
+function downloadMessage(msg) {
+    const lines = [
+        `From: ${msg.sender_username}`,
+        `To:   ${msg.recipient_username}`,
+        `Date: ${msg.created_at ? new Date(msg.created_at).toLocaleString() : 'unknown'}`,
+    ];
+    if (msg.tx_hash) lines.push(`Blockchain tx: ${msg.tx_hash}`);
+    lines.push('', msg.plaintext ?? '');
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `message-${msg.id}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
 function escapeHtml(str) {
     return String(str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -437,7 +464,12 @@ function showAuthError(msg) {
     setTimeout(() => { el.hidden = true; }, 6000);
 }
 
+// Holds the most recently rendered messages so the delete/download buttons
+// can look up the full message object by id without another round-trip.
+let currentMessages = [];
+
 function renderMessages(messages) {
+    currentMessages = messages;
     const list = document.getElementById('message-list');
     list.innerHTML = '';
 
@@ -449,6 +481,17 @@ function renderMessages(messages) {
     for (const msg of messages) {
         const li   = document.createElement('li');
         const time = msg.created_at ? new Date(msg.created_at).toLocaleString() : '';
+        const chain = msg.tx_hash
+            ? `<div class="msg-chain">On-chain: <code title="${escapeHtml(msg.tx_hash)}">${escapeHtml(msg.tx_hash.slice(0, 22))}…</code></div>`
+            : '';
+
+        // We can only download a message whose plaintext we actually have.
+        const canDownload = !msg.isSent && msg.plaintext !== null;
+        const actions = `
+                <div class="msg-actions">
+                    ${canDownload ? `<button class="secondary small" data-action="download" data-id="${msg.id}">Download</button>` : ''}
+                    <button class="secondary small msg-delete" data-action="delete" data-id="${msg.id}">Delete</button>
+                </div>`;
 
         if (msg.isSent) {
             li.className = 'msg-sent';
@@ -458,7 +501,7 @@ function renderMessages(messages) {
                     <time>${escapeHtml(time)}</time>
                 </div>
                 <p class="msg-body msg-body-sent">Encrypted — content not stored server-side</p>
-                ${msg.tx_hash ? `<div class="msg-chain">On-chain: <code title="${escapeHtml(msg.tx_hash)}">${escapeHtml(msg.tx_hash.slice(0, 22))}…</code></div>` : ''}`;
+                ${chain}${actions}`;
         } else {
             li.className = 'msg-received';
             li.innerHTML = `
@@ -467,7 +510,7 @@ function renderMessages(messages) {
                     <time>${escapeHtml(time)}</time>
                 </div>
                 <p class="msg-body">${msg.plaintext !== null ? escapeHtml(msg.plaintext) : '<em>Decryption failed</em>'}</p>
-                ${msg.tx_hash ? `<div class="msg-chain">On-chain: <code title="${escapeHtml(msg.tx_hash)}">${escapeHtml(msg.tx_hash.slice(0, 22))}…</code></div>` : ''}`;
+                ${chain}${actions}`;
         }
 
         list.appendChild(li);
@@ -580,6 +623,35 @@ document.addEventListener('DOMContentLoaded', async () => {
             status.textContent = `Error: ${e.message}`;
         } finally {
             btn.disabled = false;
+        }
+    });
+
+    // Delete / Download buttons are added per-message in renderMessages, so we
+    // listen on the list itself and figure out which message was clicked.
+    document.getElementById('message-list').addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+
+        const id  = Number(btn.dataset.id);
+        const msg = currentMessages.find(m => m.id === id);
+        if (!msg) return;
+
+        if (btn.dataset.action === 'download') {
+            downloadMessage(msg);
+            return;
+        }
+
+        if (btn.dataset.action === 'delete') {
+            if (!confirm('Delete this message? This cannot be undone.')) return;
+            const status = document.getElementById('inbox-status');
+            btn.disabled = true;
+            try {
+                await deleteMessage(id);
+                renderMessages(await getMessages());
+            } catch (err) {
+                status.textContent = `Delete failed: ${err.message}`;
+                btn.disabled = false;
+            }
         }
     });
 

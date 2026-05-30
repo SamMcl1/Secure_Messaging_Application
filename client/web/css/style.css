@@ -376,6 +376,19 @@ button.small {
     border-radius: 4px;
 }
 
+.msg-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+}
+
+.msg-delete:hover {
+    border-color: #e5484d;
+    color: #e5484d;
+    opacity: 1;
+}
+
 .li-empty {
     color: var(--text-3);
     font-size: 0.82rem;
