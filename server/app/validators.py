@@ -89,6 +89,12 @@ class RegisterRequest(BaseModel):
             raise ValueError('public_key must be a non-empty base64 string')
         if not _BASE64.fullmatch(v):
             raise ValueError('public_key must be valid base64')
+        try:
+            raw = base64.b64decode(v, validate=True)
+        except Exception:
+            raise ValueError('public_key must be valid base64')
+        if len(raw) != 32:
+            raise ValueError('public_key must decode to a 32-byte X25519 key')
         return v
 
     @field_validator('encrypted_private_key')
