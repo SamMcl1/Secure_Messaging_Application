@@ -134,6 +134,60 @@ async function decryptPrivateKey(envelopeB64, password) {
     }
 }
 
+// Generate a fresh X25519 identity keypair in the browser.
+// Returns the raw 32-byte private and public keys. The private key is
+// generated here and never sent to the server in the clear — only the public
+// key and a password-encrypted envelope of the private key leave the client.
+async function generateIdentityKeypair() {
+    const kp = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+    const pubBytes = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+
+    // Raw export of an X25519 private key isn't supported everywhere, so read
+    // the scalar out of the JWK 'd' field (base64url) instead.
+    const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+    let d = jwk.d.replace(/-/g, '+').replace(/_/g, '/');
+    while (d.length % 4) d += '=';
+    const skBytes = b64ToBytes(d);
+
+    return { skBytes, pubBytes };
+}
+
+// Encrypt a private key under the user's password — the client-side counterpart
+// of decryptPrivateKey. Produces the same base64 JSON envelope the server used
+// to, so the rest of the app (storeSession → decryptPrivateKey) is unchanged.
+async function encryptPrivateKey(privateKeyBytes, password) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+
+    // Argon2id params must match decryptPrivateKey / the server exactly.
+    const result = await window.argon2.hash({
+        pass:        password,
+        salt,
+        time:        3,
+        mem:         65536,
+        hashLen:     32,
+        parallelism: 4,
+        type:        window.argon2.ArgonType.Argon2id,
+    });
+
+    const key = await hkdfDerive(result.hash, 32, enc.encode('SecureMsg-v1-key-protection'));
+    const aesKey = await crypto.subtle.importKey('raw', key, { name: 'AES-GCM' }, false, ['encrypt']);
+    const nonce  = crypto.getRandomValues(new Uint8Array(12));
+
+    const ctBuf = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: nonce, additionalData: enc.encode('private-key') },
+        aesKey,
+        privateKeyBytes,
+    );
+
+    const envelope = {
+        v:     1,
+        salt:  bytesToB64(salt),
+        nonce: bytesToB64(nonce),
+        ct:    bytesToB64(new Uint8Array(ctBuf)),
+    };
+    return bytesToB64(enc.encode(JSON.stringify(envelope)));
+}
+
 // Hash the plaintext with keccak256 so the server can record it on-chain.
 // We use js-sha3 because Web Crypto doesn't support keccak.
 function keccak256Hex(bytes) {
@@ -267,9 +321,20 @@ async function apiFetch(path, options = {}, _retry = false) {
 }
 
 async function register(username, password) {
+    // Generate the identity keypair in the browser and wrap the private key
+    // under the password here, so the server only ever receives the public key
+    // and an opaque encrypted envelope — never the raw private key.
+    const { skBytes, pubBytes } = await generateIdentityKeypair();
+    const encrypted_private_key = await encryptPrivateKey(skBytes, password);
+
     const data = await apiFetch('/auth/register', {
         method: 'POST',
-        body:   JSON.stringify({ username, password }),
+        body:   JSON.stringify({
+            username,
+            password,
+            public_key:            bytesToB64(pubBytes),
+            encrypted_private_key,
+        }),
     });
     await storeSession(data, password);
 }

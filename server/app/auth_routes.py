@@ -1,4 +1,3 @@
-import base64
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, g
@@ -6,7 +5,6 @@ from app.models import User, RevokedToken
 from app.jwt_utils import create_tokens, verify_token, token_required
 from app.validators import parse_body, RegisterRequest, LoginRequest, RefreshRequest, LogoutRequest
 from app.extensions import limiter
-from app.crypto import generate_keypair, encrypt_private_key
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -21,13 +19,11 @@ def register():
     if User.get_by_username(body.username):
         return jsonify({'message': 'Username already exists'}), 409
 
-    # Server generates X25519 keypair — public key published for TOFU lookup,
-    # private key wrapped under the user's password and never stored raw.
-    sk_bytes, pk_bytes = generate_keypair()
-    public_key = base64.b64encode(pk_bytes).decode()
-    encrypted_private_key = encrypt_private_key(sk_bytes, body.password)
-
-    user = User.create(body.username, body.password, public_key, encrypted_private_key)
+    # The client generates its own X25519 keypair and encrypts the private key
+    # under the user's password. We receive only the public key (published for
+    # TOFU lookup) and the opaque encrypted envelope — the raw private key is
+    # never sent to or stored by the server.
+    user = User.create(body.username, body.password, body.public_key, body.encrypted_private_key)
     if not user:
         if User.get_by_username(body.username):
             return jsonify({'message': 'Username already exists'}), 409
