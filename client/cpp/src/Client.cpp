@@ -42,8 +42,13 @@ static std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> makeCurl(const std::s
 
     // If a pin is set, reject any cert whose public key doesn't match — even
     // a CA-valid cert. Format: "sha256//<base64-encoded-spki-hash>".
-    if (!pin.empty())
-        curl_easy_setopt(handle.get(), CURLOPT_PINNEDPUBLICKEY, pin.c_str());
+    if (!pin.empty()) {
+        const CURLcode rc =
+            curl_easy_setopt(handle.get(), CURLOPT_PINNEDPUBLICKEY, pin.c_str());
+        if (rc != CURLE_OK)
+            throw std::runtime_error(std::string("Failed to set pinned public key: ") +
+                                     curl_easy_strerror(rc));
+    }
 
     return handle;
 }
