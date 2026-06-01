@@ -33,7 +33,15 @@ int main(int argc, char* argv[]) {
     const std::string username = argv[2];
     const std::string password = argv[3];
 
-    Client client(baseUrl);
+    // SHA-256 SPKI pin for hangover.theburkenator.com — rejects any cert whose
+    // public key doesn't match, even if it chains to a trusted CA.
+    static constexpr const char* SERVER_PIN =
+        "sha256//cWA8vA4j7Gb+jf6PAQOv7CAr3OMBVsy9QLzGayVP05U=";
+
+    const std::string certPin =
+        (baseUrl.rfind("https://hangover.theburkenator.com", 0) == 0) ? SERVER_PIN : "";
+
+    Client client(baseUrl, certPin);
 
     if (!client.login(username, password)) {
         std::cerr << "Login failed — check credentials and server URL\n";

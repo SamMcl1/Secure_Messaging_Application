@@ -8,7 +8,7 @@
 // All auth tokens are kept in memory — never written to disk.
 class Client {
 public:
-    explicit Client(std::string baseUrl);
+    explicit Client(std::string baseUrl, std::string certPin = "");
 
     // POST /auth/login — stores access/refresh tokens on success.
     bool login(const std::string& username, const std::string& password);
@@ -40,6 +40,7 @@ private:
     Response httpGet (const std::string& path);
 
     std::string m_baseUrl;
+    std::string m_certPin;
     std::string m_accessToken;
     std::string m_refreshToken;
     int         m_userId{0};

@@ -28,7 +28,7 @@ using SlistPtr = std::unique_ptr<curl_slist, SlistDeleter>;
 // Create a CURL handle wrapped in a unique_ptr.
 // curl_easy_cleanup is the deleter, so the handle is freed automatically
 // when the unique_ptr goes out of scope — even on early returns.
-static std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> makeCurl() {
+static std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> makeCurl(const std::string& pin) {
     CURL* raw = curl_easy_init();
     if (!raw) throw std::runtime_error("curl_easy_init failed");
 
@@ -40,6 +40,16 @@ static std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> makeCurl() {
     curl_easy_setopt(handle.get(), CURLOPT_TIMEOUT, 10L);
     curl_easy_setopt(handle.get(), CURLOPT_WRITEFUNCTION, writeCallback);
 
+    // If a pin is set, reject any cert whose public key doesn't match — even
+    // a CA-valid cert. Format: "sha256//<base64-encoded-spki-hash>".
+    if (!pin.empty()) {
+        const CURLcode rc =
+            curl_easy_setopt(handle.get(), CURLOPT_PINNEDPUBLICKEY, pin.c_str());
+        if (rc != CURLE_OK)
+            throw std::runtime_error(std::string("Failed to set pinned public key: ") +
+                                     curl_easy_strerror(rc));
+    }
+
     return handle;
 }
 
@@ -47,8 +57,8 @@ static std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> makeCurl() {
 // Client implementation
 // ---------------------------------------------------------------------------
 
-Client::Client(std::string baseUrl)
-    : m_baseUrl(std::move(baseUrl))
+Client::Client(std::string baseUrl, std::string certPin)
+    : m_baseUrl(std::move(baseUrl)), m_certPin(std::move(certPin))
 {
     // curl_global_init must be called once per process before any easy handle
     // is created. The static flag ensures this happens exactly once even if
@@ -62,7 +72,7 @@ Client::Client(std::string baseUrl)
 }
 
 Client::Response Client::httpPost(const std::string& path, const std::string& jsonBody) {
-    auto curl = makeCurl();
+    auto curl = makeCurl(m_certPin);
     Response resp;
 
     curl_easy_setopt(curl.get(), CURLOPT_URL,        (m_baseUrl + path).c_str());
@@ -84,7 +94,7 @@ Client::Response Client::httpPost(const std::string& path, const std::string& js
 }
 
 Client::Response Client::httpGet(const std::string& path) {
-    auto curl = makeCurl();
+    auto curl = makeCurl(m_certPin);
     Response resp;
 
     curl_easy_setopt(curl.get(), CURLOPT_URL,       (m_baseUrl + path).c_str());
