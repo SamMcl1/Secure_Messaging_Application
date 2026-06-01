@@ -38,7 +38,10 @@ int main(int argc, char* argv[]) {
     static constexpr const char* SERVER_PIN =
         "sha256//cWA8vA4j7Gb+jf6PAQOv7CAr3OMBVsy9QLzGayVP05U=";
 
-    Client client(baseUrl, SERVER_PIN);
+    const std::string certPin =
+        (baseUrl.rfind("https://hangover.theburkenator.com", 0) == 0) ? SERVER_PIN : "";
+
+    Client client(baseUrl, certPin);
 
     if (!client.login(username, password)) {
         std::cerr << "Login failed — check credentials and server URL\n";
