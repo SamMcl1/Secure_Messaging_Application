@@ -452,6 +452,32 @@ async function deleteMessage(messageId) {
     return apiFetch(`/messages/${messageId}`, { method: 'DELETE' });
 }
 
+async function forwardMessage(messageId, plaintext, recipientUsername) {
+    const recipient = await lookupRecipient(recipientUsername);
+    const recipientPkBytes = b64ToBytes(recipient.public_key);
+    const plaintextBytes   = enc.encode(plaintext);
+
+    let contentHash = null;
+    try { contentHash = keccak256Hex(plaintextBytes); } catch { /* blockchain optional */ }
+
+    const { ephPub, ciphertext } = await hpkeSeal(
+        session.privateKey,
+        session.publicKeyBytes,
+        recipientPkBytes,
+        plaintextBytes,
+    );
+
+    return apiFetch(`/messages/${messageId}/forward`, {
+        method: 'POST',
+        body:   JSON.stringify({
+            recipient_id: recipient.user_id,
+            ciphertext,
+            eph_pub:      ephPub,
+            ...(contentHash ? { content_hash: contentHash } : {}),
+        }),
+    });
+}
+
 // Save a message to a local .txt file. Works for any message we can read
 // (received or shared) — sent messages can't be decrypted client-side so
 // there's nothing to download for those.
@@ -509,10 +535,11 @@ function renderMessages(messages) {
             ? `<div class="msg-chain">On-chain: <code title="${escapeHtml(msg.tx_hash)}">${escapeHtml(msg.tx_hash.slice(0, 22))}…</code></div>`
             : '';
 
-        // We can only download a message whose plaintext we actually have.
         const canDownload = !msg.isSent && msg.plaintext !== null;
+        const canForward  = !msg.isSent && msg.plaintext !== null;
         const actions = `
                 <div class="msg-actions">
+                    ${canForward  ? `<button class="secondary small" data-action="forward"  data-id="${msg.id}">Forward</button>` : ''}
                     ${canDownload ? `<button class="secondary small" data-action="download" data-id="${msg.id}">Download</button>` : ''}
                     <button class="secondary small msg-delete" data-action="delete" data-id="${msg.id}">Delete</button>
                 </div>`;
@@ -675,6 +702,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (btn.dataset.action === 'download') {
             downloadMessage(msg);
+            return;
+        }
+
+        if (btn.dataset.action === 'forward') {
+            const to = prompt('Forward to username:');
+            if (!to || !to.trim()) return;
+            const status = document.getElementById('inbox-status');
+            btn.disabled = true;
+            status.textContent = 'Forwarding…';
+            try {
+                await forwardMessage(id, msg.plaintext, to.trim());
+                status.textContent = `Forwarded to ${to.trim()}.`;
+                setTimeout(() => { status.textContent = ''; }, 4000);
+            } catch (err) {
+                status.textContent = `Forward failed: ${err.message}`;
+            } finally {
+                btn.disabled = false;
+            }
             return;
         }
 
