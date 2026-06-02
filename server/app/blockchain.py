@@ -35,10 +35,12 @@ try:
     if _meta.get('address') and _meta.get('abi') and _rpc_url and _private_key:
         _w3       = Web3(Web3.HTTPProvider(_rpc_url))
         _account  = _w3.eth.account.from_key(_private_key)
-        _contract = _w3.eth.contract(
-            address=Web3.to_checksum_address(_meta['address']),
-            abi=_meta['abi'],
-        )
+        _address = Web3.to_checksum_address(_meta['address'])
+        if not _w3.is_connected():
+            raise RuntimeError('Sepolia RPC is not reachable')
+        if not _w3.eth.get_code(_address):
+            raise RuntimeError(f'no contract code at {_meta["address"]}')
+        _contract = _w3.eth.contract(address=_address, abi=_meta['abi'])
         log.info('blockchain: connected to MessageDigest at %s', _meta['address'])
     else:
         log.warning('blockchain: missing config — run deploy.py and set env vars to enable')
@@ -65,16 +67,24 @@ def record_digest(content_hash_hex: str):
         # Using 'pending' includes any already-queued transactions from this account.
         with _nonce_lock:
             nonce = _w3.eth.get_transaction_count(_account.address, 'pending')
+            gas_estimate = _contract.functions.recordDigest(raw).estimate_gas({
+                'from': _account.address,
+            })
             tx = _contract.functions.recordDigest(raw).build_transaction({
                 'from':     _account.address,
                 'nonce':    nonce,
-                'gas':      80_000,
+                'gas':      int(gas_estimate * 1.25),
                 'gasPrice': _w3.eth.gas_price,
             })
             signed  = _account.sign_transaction(tx)
             tx_hash = _w3.eth.send_raw_transaction(signed.raw_transaction)
 
         # Return immediately — the caller stores the hash and the chain confirms later.
+        receipt = _w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+        if receipt.status != 1:
+            log.error('blockchain: transaction failed: 0x%s', tx_hash.hex())
+            return None
+
         return '0x' + tx_hash.hex()
     except Exception as e:
         log.error('blockchain: record_digest failed: %s', e)

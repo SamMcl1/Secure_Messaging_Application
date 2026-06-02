@@ -1,13 +1,30 @@
 """
-Cryptographic primitives — authenticated key establishment, AEAD, HKDF, private key protection.
+Cryptographic primitives — REFERENCE IMPLEMENTATION.
 
-Key establishment: HPKE Mode_Auth-inspired construction over X25519 + HKDF-SHA256 + AES-256-GCM.
-  Follows the two-DH pattern from RFC 9180 §5.1.3 (ephemeral-static + static-static) but does
-  not implement RFC 9180's LabeledExtract/LabeledExpand suite_id structure. The security
-  properties (sender authentication, KEM secrecy) hold; the wire format is not interoperable
-  with RFC 9180 compliant implementations.
+IMPORTANT: The live server never encrypts or decrypts message content. End-to-end
+encryption runs entirely in the client (`client/web/js/app.js`, using the Web Crypto
+API): the browser generates the X25519 keypair, seals the private key under the user's
+password, and performs all message AEAD. The server only ever stores and relays
+ciphertext + metadata — it holds no key capable of recovering plaintext.
 
-Password/key protection: Argon2id → HKDF-SHA256 → AES-256-GCM
+The key-establishment and private-key-wrapping functions below (`generate_keypair`,
+`hpke_seal`, `hpke_open`, `encrypt_private_key`, `decrypt_private_key`) are a
+byte-compatible Python mirror of the client-side scheme. They are kept as an
+executable specification — documentation of the protocol and a cross-check for the
+JavaScript — and are NOT wired into any server route. Nothing in `server/app/`
+imports them. (Verify with `grep -rn hpke_seal server/`.)
+
+The ONLY part of this module the live server actually uses is the Argon2id parameter
+constants (ARGON2_*), imported by `password_utils.py` so the design document has a
+single source of truth for those values.
+
+Reference scheme mirrored here:
+  Key establishment: HPKE Mode_Auth-inspired construction over X25519 + HKDF-SHA256 + AES-256-GCM.
+    Follows the two-DH pattern from RFC 9180 §5.1.3 (ephemeral-static + static-static) but does
+    not implement RFC 9180's LabeledExtract/LabeledExpand suite_id structure. The security
+    properties (sender authentication, KEM secrecy) hold; the wire format is not interoperable
+    with RFC 9180 compliant implementations.
+  Password/key protection: Argon2id → HKDF-SHA256 → AES-256-GCM
 """
 
 import os
@@ -58,6 +75,8 @@ def _hkdf(ikm: bytes, length: int, info: bytes, salt: bytes | None = None) -> by
 
 
 # ── Authenticated key establishment (HPKE Mode_Auth-inspired) ───────────────
+# REFERENCE ONLY — not called by any server route. The live E2EE path is the
+# client (client/web/js/app.js). See the module docstring.
 
 def hpke_seal(
     sender_sk_bytes: bytes,
@@ -150,6 +169,9 @@ def hpke_open(
 
 
 # ── Private key encryption at rest ──────────────────────────────────────────
+# REFERENCE ONLY — the browser wraps/unwraps the private key (app.js
+# encryptPrivateKey/decryptPrivateKey). The server only stores the opaque
+# envelope it receives; it never runs these functions.
 
 def encrypt_private_key(private_key_bytes: bytes, password: str) -> str:
     """Protect a user's X25519 private key with their password.

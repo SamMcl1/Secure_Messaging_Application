@@ -3,7 +3,15 @@
 **Group:** hangover
 **Module:** CS4455 Cybersecurity — Epic Project 2026
 **Component:** End-to-end encrypted messaging (Cryptography minor)
-**Implementation:** `server/app/crypto.py`, `server/app/password_utils.py`, `client/web/js/app.js`
+**Implementation:**
+- **End-to-end encryption (live path):** `client/web/js/app.js` — the browser generates the
+  X25519 keypair, seals the private key under the user's password, and performs all message
+  AEAD via the Web Crypto API. The server never holds plaintext or any key that recovers it.
+- **Server-side password hashing:** `server/app/password_utils.py` (Argon2id).
+- **Reference implementation (not in the live path):** `server/app/crypto.py` — a
+  byte-compatible Python mirror of the client scheme, kept as an executable specification and
+  cross-check. No server route imports its encryption functions; only its Argon2id parameter
+  constants are used (by `password_utils.py`).
 
 ---
 

@@ -17,6 +17,26 @@ function bytesToB64(bytes) {
     return btoa(bin);
 }
 
+// base64url (no padding) — needed for OKP JWK key material (d / x fields).
+function bytesToB64url(bytes) {
+    return bytesToB64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Import a raw 32-byte X25519 private scalar as a usable CryptoKey.
+// NOTE: crypto.subtle.importKey('raw', ...) for X25519 only yields a *public*
+// key, so it rejects the 'deriveBits' usage ("Unsupported key usage"). The
+// private key must be imported via JWK (OKP) with both d (private) and x
+// (public) fields. pubBytes is the matching 32-byte public key.
+async function importX25519PrivateKey(skBytes, pubBytes) {
+    return crypto.subtle.importKey(
+        'jwk',
+        { kty: 'OKP', crv: 'X25519', d: bytesToB64url(skBytes), x: bytesToB64url(pubBytes) },
+        { name: 'X25519' },
+        false,
+        ['deriveBits'],
+    );
+}
+
 function concatBytes(...arrays) {
     const total = arrays.reduce((s, a) => s + a.length, 0);
     const out = new Uint8Array(total);
@@ -209,6 +229,12 @@ const session = {
 function isLoggedIn() { return !!session.accessToken; }
 
 async function storeSession(data, password) {
+    if (!data.public_key || !data.encrypted_private_key) {
+        throw new Error(
+            'This account was created before browser key storage was added. Please register a new account.',
+        );
+    }
+
     const skBytes = await decryptPrivateKey(data.encrypted_private_key, password);
 
     session.userId         = data.user_id;
@@ -217,9 +243,7 @@ async function storeSession(data, password) {
     session.refreshToken   = data.refresh_token;
     session.publicKeyBytes = b64ToBytes(data.public_key);
     session.encPrivateKey  = data.encrypted_private_key;
-    session.privateKey     = await crypto.subtle.importKey(
-        'raw', skBytes, { name: 'X25519' }, false, ['deriveBits'],
-    );
+    session.privateKey     = await importX25519PrivateKey(skBytes, session.publicKeyBytes);
 
     // Store the encrypted envelope, not the raw decrypted key bytes.
     // Even if XSS reads sessionStorage it only sees the ciphertext,
@@ -276,7 +300,7 @@ async function restoreSession() {
 
 // API base — leave empty when the client is served from the same host as the server.
 // Set to the server URL (e.g. 'http://localhost:5000') if running separately.
-const API_BASE = '';
+const API_BASE = 'http://localhost:5000';
 
 // Try to get a new access token using the refresh token.
 // Returns true on success and updates the session + sessionStorage.

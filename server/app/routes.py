@@ -32,7 +32,7 @@ def _record_and_store(app, message_id: int, content_hash: str):
     with app.app_context():
         tx = blockchain.record_digest(content_hash)
         if tx:
-            Message.set_tx_hash(message_id, tx)
+            Message.store_blockchain_record(message_id, tx, content_hash)
 
 
 def _can_access(msg, user_id):

@@ -1,7 +1,8 @@
 // Verification page — reads MessageDigest contract from Ethereum Sepolia
 // Loads ABI + address from ../../abi/MessageDigest.json (same-origin fetch)
 
-const SEPOLIA_RPC = 'https://rpc.sepolia.org';
+const SEPOLIA_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
+const FALLBACK_CONTRACT_ADDRESS = '0x3181ed062968542c337F0DE491BFD0a471a5af42';
 
 const ABI = [
     'event DigestRecorded(bytes32 indexed hash, uint256 timestamp, uint256 index)',
@@ -49,7 +50,8 @@ async function loadContractAddress() {
         _contractAddress = json.address;
         return _contractAddress;
     } catch (e) {
-        throw new Error(`Failed to load contract address: ${e.message}`);
+        _contractAddress = FALLBACK_CONTRACT_ADDRESS;
+        return _contractAddress;
     }
 }
 
