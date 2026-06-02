@@ -1,6 +1,8 @@
 #include "Message.hpp"
 #include <utility>
 
+// Move the string parameters into the members instead of copying them.
+// The timestamp is a plain integer (time_t) so it gets copied by value as normal.
 Message::Message(std::string id,
                  std::string sender,
                  std::string recipient,

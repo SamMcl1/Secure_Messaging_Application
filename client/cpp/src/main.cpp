@@ -63,6 +63,8 @@ int main(int argc, char* argv[]) {
         }
 
         if (cmd == "inbox") {
+            // Reset the store before each fetch so messages from a previous inbox
+            // call don't accumulate and show up as duplicates in the same session.
             store = MessageStore{};
             int n = client.fetchInbox(store);
             if (n == -1) {

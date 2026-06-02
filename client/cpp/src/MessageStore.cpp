@@ -38,6 +38,10 @@ std::vector<const Message*> MessageStore::findBySender(const std::string& sender
 }
 
 std::vector<const Message*> MessageStore::getSortedByTime() const {
+    // Copy raw non-owning pointers into a separate vector before sorting.
+    // Sorting m_messages directly would reorder the unique_ptrs and change insertion
+    // order as a side effect, which callers would not expect. This way the internal
+    // storage stays unchanged and callers get a sorted snapshot of observing pointers.
     std::vector<const Message*> ptrs;
     ptrs.reserve(m_messages.size());
     for (const auto& m : m_messages) {

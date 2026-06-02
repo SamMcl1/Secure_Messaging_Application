@@ -40,6 +40,8 @@ const Message* Conversation::findLatest(const std::string& userA,
     auto it = m_threads.find(makeKey(userA, userB));
     if (it == m_threads.end() || it->second.empty()) return nullptr;
 
+    // std::max_element finds the highest-timestamped message in one pass.
+    // Sorting the whole thread just to read the last element would be wasteful here.
     auto maxIt = std::max_element(
         it->second.begin(), it->second.end(),
         [](const std::unique_ptr<Message>& a, const std::unique_ptr<Message>& b) {
@@ -51,6 +53,8 @@ const Message* Conversation::findLatest(const std::string& userA,
 
 std::size_t Conversation::totalCount() const {
     std::size_t total = 0;
+    // C++17 structured binding: auto& [key, vec] unpacks the map pair so we
+    // can write vec.size() directly instead of it->second.size().
     for (const auto& [key, vec] : m_threads) {
         total += vec.size();
     }

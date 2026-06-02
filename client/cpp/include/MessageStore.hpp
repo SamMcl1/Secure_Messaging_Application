@@ -23,5 +23,9 @@ public:
     std::size_t size() const;
 
 private:
+    // unique_ptr gives the store sole ownership of each Message and ensures it is
+    // deleted automatically when removed or when the store goes out of scope.
+    // Methods that return pointers give back raw non-owning pointers so callers
+    // can read the data without accidentally taking ownership.
     std::vector<std::unique_ptr<Message>> m_messages;
 };

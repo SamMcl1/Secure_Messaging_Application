@@ -2,6 +2,10 @@
 #include <string>
 #include <ctime>
 
+// Represents a single encrypted message, either received from the server or ready to send.
+// The server stores and relays only ciphertext, so the plaintext never touches it.
+// ephPub is the sender's ephemeral public key; the recipient needs it alongside their
+// own private key to re-derive the shared secret and decrypt the ciphertext.
 class Message {
 public:
     Message(std::string id,
