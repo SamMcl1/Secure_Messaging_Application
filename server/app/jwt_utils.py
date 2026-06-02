@@ -86,7 +86,7 @@ def verify_token(token, token_type='access', check_revoked=True):
     _, public_key = load_keys()
 
     try:
-        payload = jwt.decode(token, public_key, algorithms=['RS256'])
+        payload = jwt.decode(token, public_key, algorithms=['RS256']) # Explicitly passed in to ensure it uses the correct key and algorithm
         if payload.get('type') != token_type:
             return None
         if check_revoked:
@@ -104,7 +104,7 @@ def verify_token(token, token_type='access', check_revoked=True):
 
 def token_required(f):
     """Decorator to protect routes with JWT authentication."""
-    @wraps(f)
+    @wraps(f)  # Preserve original function's metadata
     def decorated(*args, **kwargs):
         token = None
 
