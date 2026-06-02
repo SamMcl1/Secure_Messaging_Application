@@ -80,14 +80,14 @@ The binary is produced at `client/cpp/build/secure_client`.
 
 | Argument | Description | Example |
 |---|---|---|
-| `server_url` | Base URL of the backend (no trailing slash) | `https://hangover.theburkenator.com` |
+| `server_url` | Base URL of the backend (no trailing slash) | `https://the-hangover.theburkenator.com` |
 | `username` | Registered account username | `alice` |
 | `password` | Account password | `hunter2` |
 
 ### Example
 
 ```bash
-./secure_client https://hangover.theburkenator.com alice hunter2
+./secure_client https://the-hangover.theburkenator.com alice hunter2
 ```
 
 ---
@@ -128,7 +128,7 @@ and never sees plaintext.
 Every connection is made over HTTPS with two layers of verification:
 
 1. **Certificate chain** (`CURLOPT_SSL_VERIFYPEER`) — the server certificate must
-   chain to a trusted CA. Let's Encrypt is used on `hangover.theburkenator.com`.
+   chain to a trusted CA. Let's Encrypt is used on `the-hangover.theburkenator.com`.
 2. **Public key pin** (`CURLOPT_PINNEDPUBLICKEY`) — the server's public key must
    match the hardcoded SHA-256 SPKI pin in `main.cpp`. This rejects connections
    even from a rogue CA-signed certificate.

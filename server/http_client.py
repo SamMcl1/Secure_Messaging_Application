@@ -9,7 +9,7 @@ Usage
 -----
     from http_client import HttpClient
 
-    client = HttpClient("https://hangover.theburkenator.com")
+    client = HttpClient("https://the-hangover.theburkenator.com")
     resp   = client.post("/auth/login", json={"username": "alice", "password": "…"})
     data   = resp.json()
 
