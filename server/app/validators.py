@@ -53,7 +53,7 @@ StrictPosInt = Annotated[int, Field(strict=True, gt=0)]
 
 # Request models
 class RegisterRequest(BaseModel):
-    model_config = ConfigDict(extra='ignore', strict=True)
+    model_config = ConfigDict(extra='ignore', strict=True) # Ensures that no data about structure is leaked to clients on validation errors
 
     username: str
     password: str

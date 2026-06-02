@@ -1,4 +1,4 @@
-# Nginx reverse-proxy config for hangover.theburkenator.com
+# Nginx reverse-proxy config for the-hangover.theburkenator.com
 #
 # Place this at /etc/nginx/sites-available/hangover and symlink:
 #   sudo ln -s /etc/nginx/sites-available/hangover /etc/nginx/sites-enabled/
@@ -10,11 +10,11 @@
 #   - Flask FORCE_HTTPS=1 and TRUSTED_PROXY_COUNT=1 are set in server/.env
 #
 # To get the Let's Encrypt cert:
-#   sudo certbot --nginx -d hangover.theburkenator.com
+#   sudo certbot --nginx -d the-hangover.theburkenator.com
 
 server {
     listen 80;
-    server_name hangover.theburkenator.com;
+    server_name the-hangover.theburkenator.com;
 
     # Redirect all HTTP to HTTPS
     return 301 https://$host$request_uri;
@@ -22,11 +22,11 @@ server {
 
 server {
     listen 443 ssl;
-    server_name hangover.theburkenator.com;
+    server_name the-hangover.theburkenator.com;
 
     # --- TLS (populated by certbot) ---
-    ssl_certificate     /etc/letsencrypt/live/hangover.theburkenator.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/hangover.theburkenator.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/the-hangover.theburkenator.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/the-hangover.theburkenator.com/privkey.pem;
     include             /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
 

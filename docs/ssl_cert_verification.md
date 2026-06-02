@@ -8,7 +8,7 @@
 
 ## Overview
 
-Every connection between a client and `hangover.theburkenator.com` is encrypted
+Every connection between a client and `the-hangover.theburkenator.com` is encrypted
 with TLS.  For encryption to actually protect against man-in-the-middle (MITM)
 attacks, the client must **verify** the server's certificate:
 
@@ -45,11 +45,11 @@ defaults and makes the intent explicit.  It lives at `server/http_client.py`
 from http_client import HttpClient
 
 # Production — uses certifi CA bundle (Let's Encrypt is included)
-client = HttpClient("https://hangover.theburkenator.com")
+client = HttpClient("https://the-hangover.theburkenator.com")
 resp = client.post("/auth/login", json={"username": "alice", "password": "…"})
 
 # Integration test against a server signed by a private CA
-client = HttpClient("https://hangover.theburkenator.com", ca_bundle="/path/to/ca.pem")
+client = HttpClient("https://the-hangover.theburkenator.com", ca_bundle="/path/to/ca.pem")
 ```
 
 Construction-time guards:
@@ -149,7 +149,7 @@ curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);   // verify hostname
 // For a private CA (e.g. local dev), supply the CA cert path:
 // curl_easy_setopt(curl, CURLOPT_CAINFO, "/path/to/ca.pem");
 
-curl_easy_setopt(curl, CURLOPT_URL, "https://hangover.theburkenator.com/auth/login");
+curl_easy_setopt(curl, CURLOPT_URL, "https://the-hangover.theburkenator.com/auth/login");
 // … set CURLOPT_POSTFIELDS, CURLOPT_HTTPHEADER, etc. …
 
 CURLcode res = curl_easy_perform(curl);
@@ -179,8 +179,8 @@ On the project VM (Ubuntu), libcurl uses the system CA bundle at
 `/etc/ssl/certs/ca-certificates.crt`.  This bundle is updated via
 `apt upgrade` and includes Let's Encrypt's root CAs.
 
-Once Petr's team configures the `hangover.theburkenator.com` subdomain on the
-shared gateway, run `sudo certbot --nginx -d hangover.theburkenator.com` to
+Once Petr's team configures the `the-hangover.theburkenator.com` subdomain on the
+shared gateway, run `sudo certbot --nginx -d the-hangover.theburkenator.com` to
 replace the self-signed cert with a real Let's Encrypt cert.  After that the
 C++ client will work without any additional CA configuration.
 
@@ -214,7 +214,7 @@ curl_easy_setopt(curl, CURLOPT_CAINFO, "hangover-selfsigned.crt");
 > Update either `run.py` or the Nginx config to make them consistent before
 > running the full stack.
 
-Once the Let's Encrypt cert is in place (`hangover.theburkenator.com`), remove
+Once the Let's Encrypt cert is in place (`the-hangover.theburkenator.com`), remove
 the custom CA path.  All of the above revert to `verify=True` / default CA
 bundle and will work automatically.
 

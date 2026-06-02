@@ -25,7 +25,7 @@ static void printMessage(const Message* m) {
 int main(int argc, char* argv[]) {
     if (argc < 4) {
         std::cerr << "Usage: secure_client <base_url> <username> <password>\n"
-                  << "  e.g. secure_client https://hangover.theburkenator.com alice mypassword\n";
+                  << "  e.g. secure_client https://the-hangover.theburkenator.com alice mypassword\n";
         return 1;
     }
 
@@ -33,13 +33,13 @@ int main(int argc, char* argv[]) {
     const std::string username = argv[2];
     const std::string password = argv[3];
 
-    // SHA-256 SPKI pin for hangover.theburkenator.com — rejects any cert whose
+    // SHA-256 SPKI pin for the-hangover.theburkenator.com — rejects any cert whose
     // public key doesn't match, even if it chains to a trusted CA.
     static constexpr const char* SERVER_PIN =
         "sha256//cWA8vA4j7Gb+jf6PAQOv7CAr3OMBVsy9QLzGayVP05U=";
 
     const std::string certPin =
-        (baseUrl.rfind("https://hangover.theburkenator.com", 0) == 0) ? SERVER_PIN : "";
+        (baseUrl.rfind("https://the-hangover.theburkenator.com", 0) == 0) ? SERVER_PIN : "";
 
     Client client(baseUrl, certPin);
 

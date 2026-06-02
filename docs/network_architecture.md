@@ -12,7 +12,7 @@
 
 | Component | Technology | Location |
 |---|---|---|
-| Python backend | Flask + SSL/TLS | hangover.theburkenator.com |
+| Python backend | Flask + SSL/TLS | the-hangover.theburkenator.com |
 | SQLite database | SQLite | Server-local |
 | C++ client | TBD | Client machine |
 | Web client | HTML/JS | Client browser |

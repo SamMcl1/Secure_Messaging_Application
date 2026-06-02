@@ -179,12 +179,12 @@ class TestHttpClientWrapper:
     def test_rejects_plain_http_url(self):
         """HttpClient must refuse to be created with an http:// URL."""
         with pytest.raises(ValueError, match="https://"):
-            HttpClient("http://hangover.theburkenator.com")
+            HttpClient("http://the-hangover.theburkenator.com")
 
     def test_rejects_ca_bundle_false(self):
         """HttpClient must refuse to disable certificate verification."""
         with pytest.raises(ValueError, match="ca_bundle=False"):
-            HttpClient("https://hangover.theburkenator.com", ca_bundle=False)
+            HttpClient("https://the-hangover.theburkenator.com", ca_bundle=False)
 
     # Verification behaviour
 
