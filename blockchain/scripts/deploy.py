@@ -7,7 +7,7 @@ Extra deps (not in server requirements — install once for deployment only):
 
 Everything else (web3, python-dotenv) is already in server/requirements.txt.
 
-Required environment variables (add to .env in the project root):
+Required environment variables (add to server/.env, or .env in the project root):
     SEPOLIA_RPC_URL        e.g. https://sepolia.infura.io/v3/<your-key>
     DEPLOYER_PRIVATE_KEY   0x-prefixed hex private key of the deployer wallet
 
@@ -36,6 +36,7 @@ SOLC_VERSION = '0.8.19'
 def main() -> None:
     from dotenv import load_dotenv
     load_dotenv(ROOT / '.env')
+    load_dotenv(ROOT / 'server' / '.env', override=False)
 
     rpc_url     = os.getenv('SEPOLIA_RPC_URL')
     private_key = os.getenv('DEPLOYER_PRIVATE_KEY')
@@ -84,10 +85,14 @@ def main() -> None:
 
     # ── Deploy ────────────────────────────────────────────────────────────
     Contract = w3.eth.contract(abi=abi, bytecode=bytecode)
+    gas_estimate = Contract.constructor().estimate_gas({'from': account.address})
+    gas_limit = int(gas_estimate * 1.25)
+    print(f'Estimated deployment gas: {gas_estimate:,}; using limit {gas_limit:,}')
+
     tx = Contract.constructor().build_transaction({
         'from':     account.address,
         'nonce':    w3.eth.get_transaction_count(account.address),
-        'gas':      300_000,
+        'gas':      gas_limit,
         'gasPrice': w3.eth.gas_price,
     })
     signed  = account.sign_transaction(tx)
@@ -96,8 +101,20 @@ def main() -> None:
     print('Waiting for confirmation …')
 
     receipt  = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+    if receipt.status != 1:
+        print(
+            f'ERROR: Deployment transaction failed (status={receipt.status}, '
+            f'gas used={receipt.gasUsed:,}). ABI file was not updated.',
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     address  = receipt.contractAddress
     gas_used = receipt.gasUsed
+    code = w3.eth.get_code(Web3.to_checksum_address(address))
+    if not code:
+        print('ERROR: Deployment receipt succeeded but no contract code exists at address.', file=sys.stderr)
+        sys.exit(1)
     print(f'Contract deployed at: {address}  (gas used: {gas_used:,})')
 
     # ── Write ABI + address ───────────────────────────────────────────────

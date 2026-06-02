@@ -116,6 +116,28 @@ class Message:
             return False
 
     @staticmethod
+    def store_blockchain_record(message_id, tx_hash, digest_hash):
+        """Store the Sepolia tx hash on the message and in the audit table."""
+        try:
+            conn = get_conn()
+            with conn.cursor() as cur:
+                cur.execute(
+                    'UPDATE messages SET tx_hash = %s WHERE id = %s',
+                    (tx_hash, message_id)
+                )
+                cur.execute(
+                    '''INSERT INTO blockchain_records (message_id, tx_hash, digest_hash)
+                       VALUES (%s, %s, %s)''',
+                    (message_id, tx_hash, digest_hash)
+                )
+            return True
+        except Exception:
+            current_app.logger.exception(
+                'Message.store_blockchain_record failed message_id=%r', message_id
+            )
+            return False
+
+    @staticmethod
     def get_for_user(user_id):
         """Return all messages the user can access: sender, recipient, or explicitly granted."""
         return query(

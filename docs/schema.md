@@ -91,7 +91,7 @@ Links messages to their on-chain tamper-evident digest on Ethereum Sepolia.
 | `id` | BIGSERIAL PK | |
 | `message_id` | BIGINT FK → messages (nullable) | SET NULL on message delete — the chain record persists |
 | `tx_hash` | TEXT NOT NULL | Sepolia transaction hash for the `recordDigest` call |
-| `digest_hash` | TEXT NOT NULL | SHA-256 digest of the ciphertext recorded on-chain |
+| `digest_hash` | TEXT NOT NULL | keccak256 digest of the plaintext recorded on-chain |
 | `recorded_at` | TIMESTAMPTZ | Server timestamp |
 
 ---

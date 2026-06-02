@@ -53,6 +53,13 @@ def login():
     user = User.get_by_username(body.username)
     if not user or not user.verify_password(body.password):
         return jsonify({'message': 'Invalid username or password'}), 401
+    if not user.public_key or not user.encrypted_private_key:
+        return jsonify({
+            'message': (
+                'This account was created before browser key storage was added. '
+                'Please register a new account.'
+            )
+        }), 409
 
     access_token, refresh_token = create_tokens(user.user_id, user.username)
 

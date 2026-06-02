@@ -108,9 +108,16 @@ This compiles `blockchain/contracts/MessageDigest.sol`, deploys it to Sepolia,
 and rewrites `blockchain/abi/MessageDigest.json` with the new address + ABI.
 The deployer wallet needs a small amount of Sepolia ETH (free from a faucet).
 
-**Verification page** — open `blockchain/verification/index.html` in a browser.
-It runs independently of the messaging app: paste a message's original content
-and its transaction hash to confirm the on-chain keccak256 digest matches.
+**Verification page** — serve the repo root and open
+`/blockchain/verification/index.html`, for example:
+
+```bash
+python -m http.server 3001
+```
+
+Then visit `http://localhost:3001/blockchain/verification/index.html`. It runs
+independently of the messaging app: paste a message's original content and its
+transaction hash to confirm the on-chain keccak256 digest matches.
 
 ## Environment variables (`server/.env`)
 
