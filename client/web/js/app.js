@@ -300,7 +300,7 @@ async function restoreSession() {
 
 // API base — leave empty when the client is served from the same host as the server.
 // Set to the server URL (e.g. 'http://localhost:5000') if running separately.
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'https://the-hangover.theburkenator.com';
 
 // Try to get a new access token using the refresh token.
 // Returns true on success and updates the session + sessionStorage.
