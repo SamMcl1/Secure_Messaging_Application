@@ -552,6 +552,19 @@ function switchToAuth() {
     document.getElementById('app-panel').hidden  = true;
     document.getElementById('login-view').hidden    = false;
     document.getElementById('register-view').hidden = true;
+
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    document.getElementById('reg-username').value   = '';
+    document.getElementById('reg-password').value   = '';
+    document.getElementById('auth-error').hidden    = true;
+
+    document.getElementById('send-to').value            = '';
+    document.getElementById('message-body').value       = '';
+    document.getElementById('send-status').textContent  = '';
+    document.getElementById('inbox-status').textContent = '';
+    document.getElementById('message-list').innerHTML   = '';
+    currentMessages = [];
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
