@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
     std::string cmd;
 
     while (true) {
-        std::cout << "\nCommands: send | inbox | quit\n> ";
+        std::cout << "\nCommands: send | inbox | forward | quit\n> ";
         if (!(std::cin >> cmd)) break;
 
         if (cmd == "quit" || cmd == "q") {
@@ -118,7 +118,48 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        std::cerr << "Unknown command. Try: send | inbox | quit\n";
+        if (cmd == "forward") {
+            int messageId = 0;
+            std::cout << "Message ID to forward: ";
+            if (!(std::cin >> messageId) || messageId <= 0) {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cerr << "Invalid message ID\n";
+                continue;
+            }
+
+            int recipientId = 0;
+            std::cout << "Recipient user ID: ";
+            if (!(std::cin >> recipientId) || recipientId <= 0) {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cerr << "Invalid recipient ID\n";
+                continue;
+            }
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+            std::string ciphertext, ephPub;
+            std::cout << "Re-encrypted ciphertext (base64): ";
+            std::getline(std::cin, ciphertext);
+
+            std::cout << "Ephemeral public key (base64, eph_pub): ";
+            std::getline(std::cin, ephPub);
+
+            if (ciphertext.empty() || ephPub.empty()) {
+                std::cerr << "Ciphertext and eph_pub must not be empty\n";
+                continue;
+            }
+
+            if (client.forwardMessage(messageId, recipientId, ciphertext, ephPub)) {
+                std::cout << "Message forwarded.\n";
+            } else {
+                std::cerr << "Failed to forward — check message ID, recipient ID, "
+                             "and that ciphertext/eph_pub are valid base64\n";
+            }
+            continue;
+        }
+
+        std::cerr << "Unknown command. Try: send | inbox | forward | quit\n";
     }
 
     return 0;

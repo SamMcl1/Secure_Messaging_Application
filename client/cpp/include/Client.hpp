@@ -18,6 +18,13 @@ public:
                      const std::string& ciphertext,
                      const std::string& ephPub);
 
+    // POST /messages/<id>/forward — re-sends a message to a new recipient.
+    // The caller must supply ciphertext re-encrypted for the new recipient.
+    bool forwardMessage(int messageId,
+                        int recipientId,
+                        const std::string& ciphertext,
+                        const std::string& ephPub);
+
     // GET /messages/ — deserialises the response into Message objects and
     // appends them to store. Returns the number of messages added, or -1 on
     // HTTP error, or -2 on JSON parse error.

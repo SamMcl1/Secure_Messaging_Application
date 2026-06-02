@@ -209,5 +209,18 @@ int Client::fetchInbox(MessageStore& store) {
     }
 }
 
+bool Client::forwardMessage(int messageId,
+                            int recipientId,
+                            const std::string& ciphertext,
+                            const std::string& ephPub) {
+    const std::string body = json{
+        {"recipient_id", recipientId},
+        {"ciphertext",   ciphertext},
+        {"eph_pub",      ephPub}
+    }.dump();
+    auto resp = httpPost("/messages/" + std::to_string(messageId) + "/forward", body);
+    return resp.status == 201;
+}
+
 bool Client::isLoggedIn() const { return !m_accessToken.empty(); }
 int  Client::getUserId()  const { return m_userId; }
