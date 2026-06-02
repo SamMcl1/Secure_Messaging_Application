@@ -35,8 +35,16 @@ server {
     proxy_hide_header Server;                   # strip Werkzeug/Gunicorn header from upstream
                                                 # Nginx will still send its own Server header
 
-    # --- proxy to Gunicorn ---
+    # --- serve web client static files ---
+    root /var/www/the-hangover/client/web;
+    index index.html;
+
     location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # --- proxy API routes to Gunicorn ---
+    location ~ ^/(auth|messages)/ {
         proxy_pass         http://127.0.0.1:8000;
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
