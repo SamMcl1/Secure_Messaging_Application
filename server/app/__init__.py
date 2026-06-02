@@ -1,7 +1,8 @@
 import logging
+import os
 import re
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_talisman import Talisman
 from werkzeug.exceptions import HTTPException
@@ -68,9 +69,10 @@ def create_app(config_class=Config):
         strict_transport_security_max_age=31536000,
         strict_transport_security_include_subdomains=True,
         content_security_policy={
-            # API-only server — block everything by default.
-            # Adjust if HTML responses are ever added.
             'default-src': "'none'",
+            'script-src': "'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net",
+            'style-src': "'self'",
+            'connect-src': "'self'",
             'frame-ancestors': "'none'",
         },
         x_content_type_options=True,
@@ -94,6 +96,22 @@ def create_app(config_class=Config):
     from .routes import messages
     app.register_blueprint(auth)
     app.register_blueprint(messages, url_prefix='/messages')
+
+    _web_root = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', '..', 'client', 'web')
+    )
+
+    @app.route('/')
+    def web_index():
+        return send_from_directory(_web_root, 'index.html')
+
+    @app.route('/css/<path:filename>')
+    def web_css(filename):
+        return send_from_directory(os.path.join(_web_root, 'css'), filename)
+
+    @app.route('/js/<path:filename>')
+    def web_js(filename):
+        return send_from_directory(os.path.join(_web_root, 'js'), filename)
 
     @app.before_request
     def enforce_json_content_type():
