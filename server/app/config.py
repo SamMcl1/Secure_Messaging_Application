@@ -1,3 +1,5 @@
+"""Just reads the config from environment variables and makes it available as a class."""
+
 import os
 from dotenv import load_dotenv
 

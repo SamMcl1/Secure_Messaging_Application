@@ -97,7 +97,7 @@ The binary is produced at `client/cpp/build/secure_client`.
 ```
 Logged in as alice (user_id=3)
 
-Commands: send | inbox | quit
+Commands: send | inbox | forward | quit
 > inbox
 2 message(s)
 [2026-05-30 14:22:11] #7  bob -> alice
@@ -105,14 +105,22 @@ Commands: send | inbox | quit
 [2026-05-30 14:23:45] #8  charlie -> alice
   ciphertext: xZ7nVwYtKp2mRqLsDcBaFe...
 
-Commands: send | inbox | quit
+Commands: send | inbox | forward | quit
 > send
 Recipient user ID: 2
 Ciphertext (base64): <base64-encoded ciphertext from crypto layer>
 Ephemeral public key (base64, eph_pub): <base64-encoded ephemeral public key>
 Message sent.
 
-Commands: send | inbox | quit
+Commands: send | inbox | forward | quit
+> forward
+Message ID to forward: 7
+Recipient user ID: 4
+Re-encrypted ciphertext (base64): <ciphertext re-encrypted for new recipient>
+Ephemeral public key (base64, eph_pub): <new ephemeral public key>
+Message forwarded.
+
+Commands: send | inbox | forward | quit
 > quit
 Goodbye.
 ```

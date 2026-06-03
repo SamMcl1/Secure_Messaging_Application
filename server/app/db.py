@@ -11,7 +11,7 @@ _supabase: Client | None = None
 def init_db(app):
     global _pool, _supabase
 
-    _pool = pool.SimpleConnectionPool(
+    _pool = pool.SimpleConnectionPool( # Database connection encrypted in transit with SSL, and connection pooling for efficiency. 
         minconn=1,
         maxconn=10,
         dsn=app.config['DATABASE_URL'],
@@ -43,7 +43,7 @@ def close_conn(e=None):
         if e is None:
             conn.commit()
         else:
-            conn.rollback()
+            conn.rollback() # ACID rollback on error to prevent partial writes, which could cause data corruption or security issues. 
         _pool.putconn(conn)
 
 

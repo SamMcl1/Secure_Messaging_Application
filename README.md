@@ -48,20 +48,39 @@ CS4455 Cybersecurity — Epic Project 2026
 ## Setup
 
 ### 1. Python backend
+
 ```bash
 cd server
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
 Copy `server/.env.example` to `server/.env` and fill in the values (see
-**Environment variables** below), then run:
+**Environment variables** below).
+
+#### Generate JWT RSA keys (required — server will not start without these)
+
 ```bash
+# From the repo root
+openssl genrsa -out server/certs/private_key.pem 2048
+openssl rsa -in server/certs/private_key.pem -pubout -out server/certs/public_key.pem
+```
+
+These files are git-ignored. Alternatively, set the `JWT_PRIVATE_KEY` and
+`JWT_PUBLIC_KEY` environment variables directly in `server/.env` (paste the
+full PEM text, including header/footer lines).
+
+Then start the server:
+
+```bash
+cd server
 python run.py
 ```
-The crypto stack (`cryptography`, `argon2-cffi`) is installed by
-`requirements.txt` — no extra setup is needed for E2EE.
+
+The server listens on `http://127.0.0.1:8000` by default. The web client is
+served from the same Flask process at `http://localhost:8000/` — no separate
+web server is needed.
 
 ### 2. Database (Supabase PostgreSQL)
 
@@ -72,64 +91,97 @@ The backend uses a hosted Supabase PostgreSQL instance (connection string in
 ```
 server/database/migrations/001_initial_schema.sql     # users, messages, message_access
 server/database/migrations/002_crypto_additions.sql   # encrypted_private_key, eph_pub, revoked_tokens
-server/database/migrations/003_blockchain.sql          # messages.tx_hash
+server/database/migrations/003_blockchain.sql         # messages.tx_hash, blockchain_records
 ```
 
 Each migration is idempotent except the column rename in 002 — run each one
 exactly once on a fresh database.
 
 ### 3. C++ client
+
+Install system dependencies (Ubuntu/Debian):
+
+```bash
+sudo apt install -y build-essential cmake libcurl4-openssl-dev
+```
+
+Build:
+
 ```bash
 cd client/cpp
 mkdir build && cd build
-cmake .. && make
-./secure_client
+cmake ..
+make
 ```
+
+Run:
+
+```bash
+./secure_client https://the-hangover.theburkenator.com <username> <password>
+```
+
+See `client/cpp/README.md` for full build instructions including macOS and
+Windows.
 
 ### 4. Web client
-Serve `client/web/` over HTTP from any static server (it must be a real origin,
-not `file://`, for the Web Crypto API and CSP to work):
-```bash
-cd client/web
-python -m http.server 3000
+
+The web client is served directly by Flask from the same process as the API.
+Once the server is running (step 1), open:
+
+```
+http://localhost:8000/
 ```
 
-### 5. Blockchain (Ethereum Sepolia)
+No separate web server is needed. Running the client from `file://` will not
+work — the Web Crypto API and the Content Security Policy both require a real
+HTTP origin.
 
-The contract is already deployed; its address and ABI live in
-`blockchain/abi/MessageDigest.json` and are read by the server at startup. To
-**redeploy** (e.g. to your own wallet):
+### 5. Blockchain verification page
+
+The standalone verification page does not require the messaging app to be
+running. Serve from the `blockchain/` directory (not the repo root) so the
+relative ABI path resolves correctly:
+
+```bash
+cd blockchain
+python -m http.server 3001
+```
+
+Then open `http://localhost:3001/verification/index.html`. Paste a message's
+original plaintext and its Sepolia transaction hash to confirm the on-chain
+keccak256 digest matches.
+
+To **redeploy** the smart contract (e.g. to your own wallet):
 
 ```bash
 pip install py-solc-x          # one-off, deploy-only dependency
 python blockchain/scripts/deploy.py
 ```
+
 This compiles `blockchain/contracts/MessageDigest.sol`, deploys it to Sepolia,
 and rewrites `blockchain/abi/MessageDigest.json` with the new address + ABI.
 The deployer wallet needs a small amount of Sepolia ETH (free from a faucet).
 
-**Verification page** — serve the repo root and open
-`/blockchain/verification/index.html`, for example:
-
-```bash
-python -m http.server 3001
-```
-
-Then visit `http://localhost:3001/blockchain/verification/index.html`. It runs
-independently of the messaging app: paste a message's original content and its
-transaction hash to confirm the on-chain keccak256 digest matches.
-
 ## Environment variables (`server/.env`)
 
-| Variable | Purpose |
-|---|---|
-| `SECRET_KEY` | Flask/JWT signing secret |
-| `DATABASE_URL` | Supabase PostgreSQL connection string |
-| `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_KEY` | Supabase project keys |
-| `ALLOWED_ORIGIN` | Exact origin the web client is served from (CORS) |
-| `SEPOLIA_RPC_URL` | Ethereum Sepolia RPC endpoint (e.g. Infura) |
-| `CONTRACT_ADDRESS` | Deployed `MessageDigest` contract address |
-| `DEPLOYER_PRIVATE_KEY` | Wallet key the server signs digest transactions with |
+| Variable | Required | Purpose |
+|---|---|---|
+| `SECRET_KEY` | Yes | Flask session signing key — generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `DATABASE_URL` | Yes | Supabase PostgreSQL connection string |
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_SERVICE_KEY` | Yes | Supabase service role key (server-only — never expose this) |
+| `JWT_PRIVATE_KEY` | No* | RSA private key PEM for JWT signing (alternative to `server/certs/private_key.pem`) |
+| `JWT_PUBLIC_KEY` | No* | RSA public key PEM for JWT verification (alternative to `server/certs/public_key.pem`) |
+| `FLASK_DEBUG` | No | Set to `1` for local development only; never in production |
+| `ALLOWED_ORIGIN` | No | Exact origin the web client is served from (CORS); leave empty if client and API share the same origin |
+| `TRUSTED_PROXY_COUNT` | No | Number of trusted reverse proxy hops (set to `1` in production behind Nginx) |
+| `FORCE_HTTPS` | No | Set to `1` in production to redirect HTTP → HTTPS |
+| `SEPOLIA_RPC_URL` | No | Ethereum Sepolia RPC endpoint (e.g. Infura) |
+| `CONTRACT_ADDRESS` | No | Deployed `MessageDigest` contract address |
+| `DEPLOYER_PRIVATE_KEY` | No | Wallet key the server signs digest transactions with |
+
+\* If neither the env var nor the `server/certs/` PEM file is present, the
+server will refuse to start with a clear error message.
 
 `SEPOLIA_RPC_URL`, `CONTRACT_ADDRESS`, and `DEPLOYER_PRIVATE_KEY` are optional —
 if unset, the server runs normally and simply skips on-chain recording.

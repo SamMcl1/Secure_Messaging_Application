@@ -50,7 +50,7 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    if not app.config.get('SECRET_KEY'):
+    if not app.config.get('SECRET_KEY'): # Fail fast if SECRET_KEY is not set, to avoid silent security issues with the default key
         raise RuntimeError(
             "SECRET_KEY environment variable must be set. "
             "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
@@ -60,6 +60,7 @@ def create_app(config_class=Config):
 
     proxy_count = app.config.get('TRUSTED_PROXY_COUNT', 0)
     if proxy_count:
+        # Without ProxyFix, Flask would just get internal 127.0.0.1 address for all requests, which breaks rate limiting and logging
         app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=proxy_count, x_host=proxy_count)
 
     Talisman(
@@ -70,13 +71,13 @@ def create_app(config_class=Config):
         strict_transport_security_include_subdomains=True,
         content_security_policy={
             'default-src': "'none'",
-            'script-src': "'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net",
+            'script-src': "'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net", # Allow wasm-unsafe-eval for WebAssembly modules, which are used for crypto operations
             'style-src': "'self'",
             'connect-src': "'self'",
-            'frame-ancestors': "'none'",
+            'frame-ancestors': "'none'", # Prevents clickjacking, even if X-Frame-Options is ignored by some browsers
         },
         x_content_type_options=True,
-        frame_options='DENY',
+        frame_options='DENY', # Prevents clickjacking, even if X-Frame-Options is ignored by some browsers
     )
 
     init_db(app)
@@ -114,7 +115,7 @@ def create_app(config_class=Config):
         return send_from_directory(os.path.join(_web_root, 'js'), filename)
 
     @app.before_request
-    def enforce_json_content_type():
+    def enforce_json_content_type(): # Ensure that only JSON requests are accepted for POST/PUT/PATCH, to prevent CSRF and simplify parsing. GET requests can still be made from a browser.
         if request.method in ('POST', 'PUT', 'PATCH') and (request.content_length or 0) > 0:
             ct = request.content_type or ''
             if not ct.startswith('application/json'):
