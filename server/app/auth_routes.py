@@ -5,6 +5,7 @@ from app.models import User, RevokedToken
 from app.jwt_utils import create_tokens, verify_token, token_required
 from app.validators import parse_body, RegisterRequest, LoginRequest, RefreshRequest, LogoutRequest
 from app.extensions import limiter
+from app.password_utils import dummy_verify
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -51,7 +52,10 @@ def login():
         return err
 
     user = User.get_by_username(body.username)
-    if not user or not user.verify_password(body.password):
+    if not user:
+        dummy_verify(body.password)
+        return jsonify({'message': 'Invalid username or password'}), 401
+    if not user.verify_password(body.password):
         return jsonify({'message': 'Invalid username or password'}), 401
     if not user.public_key or not user.encrypted_private_key:
         return jsonify({
