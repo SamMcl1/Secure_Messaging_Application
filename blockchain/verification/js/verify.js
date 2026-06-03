@@ -22,7 +22,7 @@ const resultDetail = document.getElementById('result-detail');
 
 function keccak256Hex(text) {
     const bytes = new TextEncoder().encode(text);
-    return '0x' + window.sha3.keccak_256(bytes);
+    return '0x' + window.keccak_256(bytes);
 }
 
 function setResult(pass, detail) {

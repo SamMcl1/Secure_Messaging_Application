@@ -211,7 +211,7 @@ async function encryptPrivateKey(privateKeyBytes, password) {
 // Hash the plaintext with keccak256 so the server can record it on-chain.
 // We use js-sha3 because Web Crypto doesn't support keccak.
 function keccak256Hex(bytes) {
-    return '0x' + window.sha3.keccak_256(bytes);
+    return '0x' + window.keccak_256(bytes);
 }
 
 // Session state — held in memory, mirrored to sessionStorage so a page reload
